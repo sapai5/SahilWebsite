@@ -89,19 +89,48 @@ function TextBeat({
    SCROLL NOTIFICATION
 ─────────────────────────────────────────────────────────────────── */
 function ScrollNotification({ scrollYProgress }: { scrollYProgress: MotionValue<number> }) {
-    const [visible, setVisible] = useState(false);
+    // Start visible immediately — new visitors see it right away
+    const [visible, setVisible] = useState(true);
+    // true = down chevron, false = up chevron (only relevant when not at frame 0)
+    const [showDown, setShowDown] = useState(true);
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Show after 3 s only if still at frame 0; hide the moment scrolling starts
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (scrollYProgress.get() === 0) setVisible(true);
+    // Helper: (re)start the 3-second inactivity countdown
+    const resetTimer = useCallback(() => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => {
+            // Show only while still inside the hero animation (progress < 1)
+            if (scrollYProgress.get() < 1) setVisible(true);
         }, 3000);
-        return () => clearTimeout(timer);
     }, [scrollYProgress]);
 
+    // Cleanup timer on unmount only (don't start a timer on mount — we show immediately)
+    useEffect(() => {
+        return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+    }, []);
+
+    // On every scroll event: hide the pill, restart the inactivity clock
     useMotionValueEvent(scrollYProgress, "change", (v) => {
-        if (v > 0) setVisible(false);
+        setVisible(false);
+        // If we've exited the hero, don't bother resetting the timer
+        if (v < 1) resetTimer();
     });
+
+
+    // At frame 0 → only down arrow; elsewhere → blink up ↕ down every 900 ms
+    useEffect(() => {
+        if (!visible) return;
+        const atStart = scrollYProgress.get() === 0;
+        if (atStart) { setShowDown(true); return; }
+
+        setShowDown(true); // start with down
+        const interval = setInterval(() => setShowDown(d => !d), 900);
+        return () => clearInterval(interval);
+    }, [visible, scrollYProgress]);
+
+    // Down path  ↓  and up path  ↑
+    const downPath = "M3 5.5l5 5 5-5";
+    const upPath = "M13 10.5l-5-5-5 5";
 
     return (
         <motion.div
@@ -112,7 +141,8 @@ function ScrollNotification({ scrollYProgress }: { scrollYProgress: MotionValue<
             className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 pointer-events-none select-none"
         >
             {/* Outer pill */}
-            <div className="relative flex items-center gap-2.5 px-5 py-3 rounded-full"
+            <div
+                className="relative flex items-center gap-2.5 px-5 py-3 rounded-full"
                 style={{
                     background: "rgba(255,255,255,0.55)",
                     backdropFilter: "blur(20px) saturate(180%)",
@@ -131,10 +161,13 @@ function ScrollNotification({ scrollYProgress }: { scrollYProgress: MotionValue<
                     }}
                 />
 
-                {/* Animated bouncing chevron */}
+                {/* Chevron — blinking up ↕ down, or just down at frame 0 */}
                 <motion.svg
-                    animate={{ y: [0, 4, 0] }}
-                    transition={{ repeat: Infinity, duration: 1.4, ease: "easeInOut" }}
+                    key={showDown ? "down" : "up"}
+                    initial={{ opacity: 0, y: showDown ? -4 : 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                     viewBox="0 0 16 16"
                     fill="none"
                     stroke="currentColor"
@@ -143,12 +176,12 @@ function ScrollNotification({ scrollYProgress }: { scrollYProgress: MotionValue<
                     strokeLinejoin="round"
                     className="w-3.5 h-3.5 text-black/50 relative"
                 >
-                    <path d="M3 5.5l5 5 5-5" />
+                    <path d={showDown ? downPath : upPath} />
                 </motion.svg>
 
                 {/* Label */}
                 <span className="relative text-[11px] tracking-[0.18em] uppercase text-black/45 font-medium">
-                    Start scrolling
+                    Scroll to explore
                 </span>
             </div>
         </motion.div>

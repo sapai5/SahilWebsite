@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sahil A. Pai | Software Engineer</title>
+  <meta name="description" content="Portfolio of Sahil A. Pai – Software Engineer, Founder, Hackathon Champion, and CS student at ASU Barrett Honors College." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===== NAV ===== -->
+  <nav id="navbar">
+    <div class="nav-inner">
+      <a href="#hero" class="nav-logo">SP</a>
+      <ul class="nav-links">
+        <li><a href="#about">About</a></li>
+        <li><a href="#skills">Skills</a></li>
+        <li><a href="#experience">Experience</a></li>
+        <li><a href="#leadership">Leadership</a></li>
+        <li><a href="#projects">Projects</a></li>
+        <li><a href="#awards">Awards</a></li>
+        <li><a href="#contact" class="nav-cta">Contact</a></li>
+      </ul>
+      <button class="hamburger" id="hamburger" aria-label="Toggle menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ===== HERO ===== -->
+  <section id="hero">
+    <div class="hero-bg">
+      <div class="orb orb1"></div>
+      <div class="orb orb2"></div>
+      <div class="orb orb3"></div>
+      <div class="grid-overlay"></div>
+    </div>
+    <div class="hero-content">
+      <p class="hero-eyebrow">👋 Hello, I'm</p>
+      <h1 class="hero-name">Sahil A. Pai</h1>
+      <div class="hero-roles">
+        <span class="role-tag">Software Engineer</span>
+        <span class="role-tag accent">Founder</span>
+        <span class="role-tag">AI Builder</span>
+        <span class="role-tag accent">Keynote Speaker</span>
+      </div>
+      <p class="hero-sub">
+        CS @ <strong>ASU Barrett Honors College</strong> · 3x Hackathon Champion · $19K in winnings ·
+        Interned at <strong>AVEVA</strong> &amp; <strong>Intel</strong>
+      </p>
+      <div class="hero-actions">
+        <a href="#experience" class="btn btn-primary">View My Work</a>
+        <a href="#contact" class="btn btn-ghost">Get In Touch</a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat"><span class="stat-num">150M+</span><span class="stat-label">IoT streams/day</span></div>
+        <div class="stat-divider"></div>
+        <div class="stat"><span class="stat-num">$19K</span><span class="stat-label">Hackathon winnings</span></div>
+        <div class="stat-divider"></div>
+        <div class="stat"><span class="stat-num">6,000+</span><span class="stat-label">Executives addressed</span></div>
+        <div class="stat-divider"></div>
+        <div class="stat"><span class="stat-num">3.81</span><span class="stat-label">GPA (Dean's List)</span></div>
+      </div>
+    </div>
+    <a href="#about" class="scroll-down" aria-label="Scroll down">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+    </a>
+  </section>
+
+  <!-- ===== ABOUT ===== -->
+  <section id="about" class="section">
+    <div class="container">
+      <div class="section-label">About Me</div>
+      <h2 class="section-title">Building at the intersection of <span class="gradient-text">AI & Systems</span></h2>
+      <div class="about-grid">
+        <div class="about-text">
+          <p>I'm a Computer Science student at <strong>Arizona State University's Barrett Honors College</strong>, passionate about building high-scale systems and AI-powered products that create real-world impact.</p>
+          <p>From architecting microservices processing <strong>150 million IoT data events daily</strong> at AVEVA, to winning a global AI championship with my startup TerraMind, I thrive at the intersection of rigorous engineering and bold entrepreneurship.</p>
+          <p>When I'm not coding, I'm on stage — I delivered the keynote on agentic AI to <strong>6,000+ Fortune 500 executives</strong> at the AVEVA World Conference in San Francisco.</p>
+        </div>
+        <div class="about-cards">
+          <div class="info-card">
+            <div class="info-card-icon">🎓</div>
+            <div>
+              <div class="info-card-title">Arizona State University</div>
+              <div class="info-card-sub">B.S. Computer Science · Barrett Honors College</div>
+              <div class="info-card-meta">GPA 3.81 · Dean's List · Expected Dec 2026</div>
+            </div>
+          </div>
+          <div class="info-card">
+            <div class="info-card-icon">📍</div>
+            <div>
+              <div class="info-card-title">Based in Tempe, AZ</div>
+              <div class="info-card-sub">Open to remote & relocation</div>
+            </div>
+          </div>
+          <div class="info-card">
+            <div class="info-card-icon">🚀</div>
+            <div>
+              <div class="info-card-title">Available for Opportunities</div>
+              <div class="info-card-sub">Internships · Full-time · Collaborations</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== SKILLS ===== -->
+  <section id="skills" class="section section-dark">
+    <div class="container">
+      <div class="section-label">Technical Skills</div>
+      <h2 class="section-title">My <span class="gradient-text">Tech Stack</span></h2>
+      <div class="skills-grid">
+
+        <div class="skill-category">
+          <div class="skill-cat-header">
+            <span class="skill-cat-icon">⌨️</span>
+            <h3>Languages</h3>
+          </div>
+          <div class="skill-tags">
+            <span class="tag">C#</span><span class="tag">C++</span><span class="tag">Java</span>
+            <span class="tag">Python</span><span class="tag">Go</span><span class="tag">SQL</span>
+            <span class="tag">LINQ</span><span class="tag">JavaScript</span><span class="tag">TypeScript</span>
+            <span class="tag">YAML</span><span class="tag">Perl</span>
+          </div>
+        </div>
+
+        <div class="skill-category">
+          <div class="skill-cat-header">
+            <span class="skill-cat-icon">🧩</span>
+            <h3>Frameworks & Libraries</h3>
+          </div>
+          <div class="skill-tags">
+            <span class="tag">ASP.NET Core</span><span class="tag">.NET Framework</span>
+            <span class="tag">React</span><span class="tag">Node.js</span>
+            <span class="tag">Three.js</span><span class="tag">Express</span><span class="tag">TensorFlow</span>
+          </div>
+        </div>
+
+        <div class="skill-category">
+          <div class="skill-cat-header">
+            <span class="skill-cat-icon">☁️</span>
+            <h3>Cloud & DevOps</h3>
+          </div>
+          <div class="skill-tags">
+            <span class="tag">AWS (EC2, S3, Lambda)</span><span class="tag">Azure</span>
+            <span class="tag">Docker</span><span class="tag">Kubernetes</span>
+            <span class="tag">Helm Charts</span><span class="tag">CI/CD Pipelines</span>
+            <span class="tag">Git</span><span class="tag">Jenkins</span>
+          </div>
+        </div>
+
+        <div class="skill-category">
+          <div class="skill-cat-header">
+            <span class="skill-cat-icon">🛢️</span>
+            <h3>Tools & Databases</h3>
+          </div>
+          <div class="skill-tags">
+            <span class="tag">MongoDB</span><span class="tag">PostgreSQL</span>
+            <span class="tag">Redis</span><span class="tag">Postman</span><span class="tag">Swagger</span>
+            <span class="tag">RESTful APIs</span><span class="tag">Microservices</span><span class="tag">Agile/Scrum</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== EXPERIENCE ===== -->
+  <section id="experience" class="section">
+    <div class="container">
+      <div class="section-label">Professional Experience</div>
+      <h2 class="section-title">Where I've <span class="gradient-text">Worked</span></h2>
+      <div class="timeline">
+
+        <div class="timeline-item" data-reveal>
+          <div class="timeline-marker"></div>
+          <div class="timeline-card">
+            <div class="timeline-header">
+              <div>
+                <h3 class="timeline-role">Software Engineering Intern</h3>
+                <div class="timeline-company">AVEVA · CONNECT Platform</div>
+              </div>
+              <div class="timeline-right">
+                <span class="timeline-date">May – Aug 2025</span>
+                <span class="timeline-location">Scottsdale, AZ</span>
+              </div>
+            </div>
+            <ul class="timeline-bullets">
+              <li>Architected and deployed enterprise-scale <strong>C# .NET microservices</strong> processing <strong>150M+ daily IoT data streams</strong> for real-time industrial monitoring across 1,000+ global manufacturing facilities.</li>
+              <li>Engineered RESTful and Minimal APIs with multi-layer architecture serving <strong>50,000+ concurrent API requests daily</strong>.</li>
+              <li>Developed test suites achieving <strong>95% code coverage</strong> for CI/CD pipelines; managed production Kubernetes deployments via Helm charts.</li>
+            </ul>
+            <div class="timeline-tags">
+              <span class="tag tag-sm">C# / .NET</span><span class="tag tag-sm">Microservices</span><span class="tag tag-sm">Kubernetes</span><span class="tag tag-sm">REST APIs</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="timeline-item" data-reveal>
+          <div class="timeline-marker"></div>
+          <div class="timeline-card">
+            <div class="timeline-header">
+              <div>
+                <h3 class="timeline-role">Software Engineering Intern</h3>
+                <div class="timeline-company">Intel Corporation · Data Center AI Group</div>
+              </div>
+              <div class="timeline-right">
+                <span class="timeline-date">May – Aug 2024</span>
+                <span class="timeline-location">Hillsboro, OR</span>
+              </div>
+            </div>
+            <ul class="timeline-bullets">
+              <li>Built automated privilege management system for Cadence EDA serving <strong>1,000+ hardware engineers</strong>, cutting provisioning time from <strong>3+ days → &lt;2 hours</strong>.</li>
+              <li>Optimized PCB design export scripts achieving a <strong>99.95% runtime reduction</strong> (40+ hours → 2 minutes) and ~70% fewer failures via improved error handling.</li>
+            </ul>
+            <div class="timeline-tags">
+              <span class="tag tag-sm">Python</span><span class="tag tag-sm">Perl</span><span class="tag tag-sm">Automation</span><span class="tag tag-sm">EDA Tools</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== LEADERSHIP / ENTREPRENEURSHIP ===== -->
+  <section id="leadership" class="section section-dark">
+    <div class="container">
+      <div class="section-label">Entrepreneurship & Leadership</div>
+      <h2 class="section-title">Building <span class="gradient-text">TerraMind</span></h2>
+      <div class="featured-card">
+        <div class="featured-badge">🏆 Global #1 Winner</div>
+        <div class="featured-top">
+          <div>
+            <h3 class="featured-title">Founder & Keynote Speaker · TerraMind</h3>
+            <p class="featured-sub">Tempe, AZ · October 2024 – Present</p>
+          </div>
+          <div class="featured-award">
+            <span class="award-amount">$13,000</span>
+            <span class="award-label">Prize Won</span>
+          </div>
+        </div>
+        <ul class="timeline-bullets">
+          <li>Won <strong>1st Place globally</strong> at AVEVA EcoTech Emerge AI World Championship against 100+ international teams; attracted angel investor interest from <strong>Y Combinator</strong>.</li>
+          <li>Built AI-powered mining sustainability platform using <strong>CNNs & decision trees</strong> to predict toxic mineral locations with <strong>95% accuracy</strong> and improve environmental compliance.</li>
+          <li>Architected full-stack solution with Google Gemini API, MongoDB, and PostgreSQL achieving <strong>sub-20-second</strong> sustainability analysis response times.</li>
+          <li>Delivered keynote on predictive & agentic AI to <strong>6,000+ Fortune 500 executives</strong> (SVPs, CEOs, board directors) at the AVEVA World Conference in San Francisco; led an executive summit with 50+ industry leaders.</li>
+        </ul>
+        <div class="timeline-tags">
+          <span class="tag tag-sm">Gemini API</span><span class="tag tag-sm">CNNs</span><span class="tag tag-sm">MongoDB</span><span class="tag tag-sm">PostgreSQL</span><span class="tag tag-sm">Public Speaking</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== PROJECTS ===== -->
+  <section id="projects" class="section">
+    <div class="container">
+      <div class="section-label">Project Experience</div>
+      <h2 class="section-title">Things I've <span class="gradient-text">Built</span></h2>
+      <div class="projects-grid">
+
+        <div class="project-card" data-reveal>
+          <div class="project-top">
+            <div class="project-icon">🎓</div>
+            <div class="project-award">🥇 1st Place · Fidelity Fintech Track</div>
+          </div>
+          <h3 class="project-title">Equalify</h3>
+          <p class="project-sub">DEI Scholarship Accessibility Platform · Sunhacks Hackathon</p>
+          <p class="project-desc">Full-stack platform aggregating <strong>$1M+ in scholarship opportunities</strong> for underrepresented students, with DUO authentication bypass to access university-protected databases.</p>
+          <ul class="project-bullets">
+            <li>Intelligent matching algorithm achieving <strong>85% faster discovery</strong> vs. manual search</li>
+            <li>Currently serving <strong>200+ active users</strong> with personalized recommendations</li>
+          </ul>
+          <div class="timeline-tags">
+            <span class="tag tag-sm">Full-Stack</span><span class="tag tag-sm">Web Scraping</span><span class="tag tag-sm">ML Matching</span>
+          </div>
+        </div>
+
+        <div class="project-card" data-reveal>
+          <div class="project-top">
+            <div class="project-icon">🌍</div>
+            <div class="project-award">🏆 Sunhacks · ASU</div>
+          </div>
+          <h3 class="project-title">GlobeTrail</h3>
+          <p class="project-sub">Agentic Travel Itinerary Platform</p>
+          <p class="project-desc">AI-powered travel planning agent using <strong>Model Context Protocol (MCP)</strong> architecture to autonomously handle flights, hotels, and activities via integrated APIs.</p>
+          <ul class="project-bullets">
+            <li>Interactive <strong>3D globe visualization</strong> with Three.js and React</li>
+            <li>Real-time pricing aggregated from multiple travel service providers</li>
+          </ul>
+          <div class="timeline-tags">
+            <span class="tag tag-sm">Three.js</span><span class="tag tag-sm">React</span><span class="tag tag-sm">MCP</span><span class="tag tag-sm">Agentic AI</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== AWARDS ===== -->
+  <section id="awards" class="section section-dark">
+    <div class="container">
+      <div class="section-label">Awards & Honors</div>
+      <h2 class="section-title">Recognition &amp; <span class="gradient-text">Achievements</span></h2>
+      <div class="awards-grid">
+
+        <div class="award-card">
+          <div class="award-icon">🏆</div>
+          <div class="award-amount">$19,000</div>
+          <div class="award-title">3× Hackathon Winner</div>
+          <div class="award-desc">$14,000 cash + $5,000 in prizes and resources across 2024–2025</div>
+        </div>
+
+        <div class="award-card">
+          <div class="award-icon">🌐</div>
+          <div class="award-amount">#1 Global</div>
+          <div class="award-title">AVEVA EcoTech AI Championship</div>
+          <div class="award-desc">Won against 100+ international teams; secured $13,000 prize and Y Combinator investor interest</div>
+        </div>
+
+        <div class="award-card">
+          <div class="award-icon">💡</div>
+          <div class="award-amount">$4,000</div>
+          <div class="award-title">Intel Andy Grove Scholarship</div>
+          <div class="award-desc">Recognizing demonstrated excellence in computer science and STEM · 2024</div>
+        </div>
+
+        <div class="award-card">
+          <div class="award-icon">🎤</div>
+          <div class="award-amount">6,000+</div>
+          <div class="award-title">Keynote at AVEVA World Conference</div>
+          <div class="award-desc">Delivered keynote on predictive and agentic AI to Fortune 500 executives in San Francisco</div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CONTACT ===== -->
+  <section id="contact" class="section">
+    <div class="container">
+      <div class="section-label">Get In Touch</div>
+      <h2 class="section-title">Let's <span class="gradient-text">Connect</span></h2>
+      <p class="contact-sub">I'm always open to new opportunities, collaborations, or just a great conversation about tech and AI.</p>
+      <div class="contact-grid">
+        <a href="mailto:sapai1@asu.edu" class="contact-card" id="contact-email">
+          <div class="contact-card-icon">✉️</div>
+          <div class="contact-card-label">Email</div>
+          <div class="contact-card-value">sapai1@asu.edu</div>
+        </a>
+        <a href="tel:+19712778872" class="contact-card" id="contact-phone">
+          <div class="contact-card-icon">📞</div>
+          <div class="contact-card-label">Phone</div>
+          <div class="contact-card-value">971-277-8872</div>
+        </a>
+        <a href="https://linkedin.com/in/sahilapai" target="_blank" rel="noopener" class="contact-card" id="contact-linkedin">
+          <div class="contact-card-icon">💼</div>
+          <div class="contact-card-label">LinkedIn</div>
+          <div class="contact-card-value">linkedin.com/in/sahilapai</div>
+        </a>
+        <a href="https://github.com/sapai5" target="_blank" rel="noopener" class="contact-card" id="contact-github">
+          <div class="contact-card-icon">🐙</div>
+          <div class="contact-card-label">GitHub</div>
+          <div class="contact-card-value">github.com/sapai5</div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="footer">
+    <div class="container">
+      <p>© 2026 Sahil A. Pai · Built with passion ☕</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

@@ -30,7 +30,7 @@ const MOBILE_FOCUS_X = 0.5; // portrait  — tweak to pan left↔right
 const MOBILE_FOCUS_Y = 0.4; // portrait  — slightly above center
 
 function frameSrc(i: number) {
-    return `/frames/${String(i + 1).padStart(5, "0")}.png`;
+    return `/frames/${String(i + 1).padStart(5, "0")}.webp`;
 }
 
 /* ─────────────────────────────────────────────────────────────────

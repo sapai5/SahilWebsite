@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import {
   motion,
   useScroll,
@@ -411,6 +411,7 @@ const skills = [
 ───────────────────────────────────────── */
 export default function Home() {
   const heroRef = useRef<HTMLDivElement>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { scrollYProgress: heroProgress } = useScroll({ target: heroRef });
   const smoothHero = useSpring(heroProgress, { stiffness: 100, damping: 28, restDelta: 0.001 });
   const contentY = useTransform(smoothHero, [0.70, 1.0], [220, 0]);
@@ -450,6 +451,7 @@ export default function Home() {
             >
               Sahil A. Pai
             </motion.a>
+            {/* Desktop nav */}
             <nav className="hidden md:flex items-center gap-1">
               {["Experience", "Leadership", "Projects", "Awards", "Contact"].map((s, i) => (
                 <motion.a
@@ -464,8 +466,40 @@ export default function Home() {
                 </motion.a>
               ))}
             </nav>
-            <GlassButton href="#contact">Get in touch</GlassButton>
+            <div className="flex items-center gap-3">
+              <GlassButton href="#contact">Get in touch</GlassButton>
+              {/* Hamburger — mobile only */}
+              <button
+                onClick={() => setMobileNavOpen(o => !o)}
+                className="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-[5px] p-1"
+                aria-label="Toggle menu"
+              >
+                <span className={`block h-[1.5px] w-5 bg-black/50 transition-all duration-300 origin-center ${mobileNavOpen ? "rotate-45 translate-y-[6.5px]" : ""}`} />
+                <span className={`block h-[1.5px] w-5 bg-black/50 transition-all duration-300 ${mobileNavOpen ? "opacity-0 scale-x-0" : ""}`} />
+                <span className={`block h-[1.5px] w-5 bg-black/50 transition-all duration-300 origin-center ${mobileNavOpen ? "-rotate-45 -translate-y-[6.5px]" : ""}`} />
+              </button>
+            </div>
           </div>
+          {/* Mobile dropdown */}
+          <motion.div
+            initial={false}
+            animate={{ height: mobileNavOpen ? "auto" : 0, opacity: mobileNavOpen ? 1 : 0 }}
+            transition={{ duration: 0.28, ease: EASE }}
+            className="md:hidden overflow-hidden border-t border-black/[0.06]"
+          >
+            <nav className="flex flex-col px-6 py-3 gap-1">
+              {["Experience", "Leadership", "Projects", "Awards", "Contact"].map((s) => (
+                <a
+                  key={s}
+                  href={`#${s.toLowerCase()}`}
+                  onClick={() => setMobileNavOpen(false)}
+                  className="py-2.5 text-[13px] text-black/50 hover:text-black/80 border-b border-black/[0.05] last:border-0 transition-colors duration-200"
+                >
+                  {s}
+                </a>
+              ))}
+            </nav>
+          </motion.div>
         </motion.div>
 
         {/* ── HERO TEXT ─────────────────────────────────────────── */}

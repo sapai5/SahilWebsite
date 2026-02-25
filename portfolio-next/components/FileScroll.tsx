@@ -17,10 +17,17 @@ const TOTAL_FRAMES = 192;
 const FOG_COLOR = "#E8E8E8";
 
 // Crop fractions to remove baked-in letterbox bars + Veo watermark.
-// CROP_TOP skips the black strip at the top, CROP_BOTTOM skips the bottom.
-// Adjust each independently — 0.05 = skip 5% of the raw frame height.
-const CROP_TOP = 0.05;  // top black bar
-const CROP_BOTTOM = 0.08;  // bottom black bar + Veo watermark
+const CROP_TOP = 0.05;    // top black bar
+const CROP_BOTTOM = 0.08; // bottom black bar + Veo watermark
+
+// Focal point for cover-crop anchor (0 = left/top, 0.5 = center, 1 = right/bottom).
+// On portrait (mobile) the 16:9 video is much wider than the viewport, so the
+// visible horizontal slice is controlled by MOBILE_FOCUS_X.
+// Tune MOBILE_FOCUS_X (0→1) to pan the crop left→right on phones.
+const FOCUS_X = 0.5;        // landscape — horizontal anchor
+const FOCUS_Y = 0.5;        // landscape — vertical anchor
+const MOBILE_FOCUS_X = 0.5; // portrait  — tweak to pan left↔right
+const MOBILE_FOCUS_Y = 0.4; // portrait  — slightly above center
 
 function frameSrc(i: number) {
     return `/frames/${String(i + 1).padStart(5, "0")}.png`;
@@ -59,19 +66,19 @@ function TextBeat({
 
     const alignClass = {
         center: "left-1/2 -translate-x-1/2 text-center items-center",
-        left: "left-8 md:left-16 lg:left-28 text-left items-start",
-        right: "right-8 md:right-16 lg:right-28 text-right items-end",
+        left: "left-5 md:left-16 lg:left-28 text-left items-start",
+        right: "right-5 md:right-16 lg:right-28 text-right items-end",
     }[beat.align];
 
     return (
         <motion.div
             style={{ opacity, y }}
-            className={`absolute bottom-[15%] flex flex-col gap-3 pointer-events-none select-none ${alignClass}`}
+            className={`absolute bottom-[20%] md:bottom-[15%] flex flex-col gap-2 md:gap-3 pointer-events-none select-none ${alignClass}`}
         >
-            <span className="text-[clamp(1.8rem,5.5vw,5rem)] font-black tracking-[-0.04em] text-black/85 leading-none">
+            <span className="text-[clamp(1.5rem,6vw,5rem)] font-black tracking-[-0.04em] text-black/85 leading-none">
                 {beat.text}
             </span>
-            <span className="text-[clamp(0.75rem,1.5vw,1.1rem)] font-light tracking-[0.18em] uppercase text-black/35">
+            <span className="text-[clamp(0.65rem,2.5vw,1.1rem)] font-light tracking-[0.12em] md:tracking-[0.18em] uppercase text-black/35">
                 {beat.sub}
             </span>
         </motion.div>
@@ -92,6 +99,9 @@ export default function FileScroll() {
     const lastFrameRef = useRef(-1);
     const rafRef = useRef<number | null>(null);
     const cssSizeRef = useRef({ w: 0, h: 0 });
+    // Tiny offscreen canvas used for the blurred portrait background.
+    // Reused across frames to avoid per-frame allocation.
+    const blurCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
     /* ── Scroll tracking ── */
     const { scrollYProgress } = useScroll({ target: containerRef });
@@ -123,15 +133,61 @@ export default function FileScroll() {
         const srcW = img.naturalWidth;
         const srcH = Math.floor(img.naturalHeight * (1 - CROP_TOP - CROP_BOTTOM));
 
-        const scale = Math.max(cw / srcW, ch / srcH);
+        const isPortrait = ch > cw;
+
+        // Portrait (mobile): contain — show full video frame with fog-color letterbox.
+        // Landscape (desktop): cover — fill viewport edge-to-edge.
+        const scale = isPortrait
+            ? Math.min(cw / srcW, ch / srcH)
+            : Math.max(cw / srcW, ch / srcH);
         const drawW = srcW * scale;
         const drawH = srcH * scale;
-        const dx = (cw - drawW) / 2;
-        const dy = (ch - drawH) / 2;
+
+        // Contain always centers; cover uses focal-point anchoring.
+        const fx = isPortrait ? 0.5 : FOCUS_X;
+        const fy = isPortrait ? 0.5 : FOCUS_Y;
+        const dx = isPortrait
+            ? (cw - drawW) / 2
+            : Math.min(0, Math.max(cw - drawW, (cw - drawW) * fx));
+        const dy = isPortrait
+            ? (ch - drawH) / 2
+            : Math.min(0, Math.max(ch - drawH, (ch - drawH) * fy));
 
         ctx.fillStyle = FOG_COLOR;
         ctx.fillRect(0, 0, cw, ch);
-        ctx.drawImage(img, srcX, srcY, srcW, srcH, dx, dy, drawW, drawH);
+
+        if (isPortrait) {
+            // Portrait (mobile): two-pass render.
+            // Pass 1 — static blurred background (always frame 0).
+            // Background never changes — only the foreground animates with scroll.
+            const BLUR_SCALE = 0.05;
+            const bw = Math.max(1, Math.round(cw * BLUR_SCALE));
+            const bh = Math.max(1, Math.round(ch * BLUR_SCALE));
+            let bCanvas = blurCanvasRef.current;
+            if (!bCanvas) { bCanvas = document.createElement("canvas"); blurCanvasRef.current = bCanvas; }
+            // Only redraw blur canvas when viewport size changes.
+            if (bCanvas.width !== bw || bCanvas.height !== bh) {
+                bCanvas.width = bw;
+                bCanvas.height = bh;
+                const bgImg = imagesRef.current[0]; // always frame 0 — static sky
+                const bCtx = bCanvas.getContext("2d");
+                if (bCtx && bgImg?.complete && bgImg.naturalWidth > 0) {
+                    const cs = Math.max(bw / srcW, bh / srcH);
+                    bCtx.drawImage(bgImg, srcX, srcY, srcW, srcH,
+                        (bw - srcW * cs) / 2, (bh - srcH * cs) / 2,
+                        srcW * cs, srcH * cs);
+                }
+            }
+            ctx.globalAlpha = 0.92;
+            ctx.drawImage(bCanvas, 0, 0, cw, ch);
+            ctx.globalAlpha = 1;
+
+            // Pass 2 — sharp contain frame animates with scroll.
+            ctx.drawImage(img, srcX, srcY, srcW, srcH, dx, dy, drawW, drawH);
+        } else {
+            // Landscape (desktop): single-pass cover, unchanged.
+            ctx.drawImage(img, srcX, srcY, srcW, srcH, dx, dy, drawW, drawH);
+        }
     }, []);
 
     /* ── Resize handler ── */
@@ -226,7 +282,7 @@ export default function FileScroll() {
     });
 
     return (
-        <div ref={containerRef} className="relative h-[400vh]">
+        <div ref={containerRef} className="relative h-[280vh] md:h-[400vh]">
             <div className="sticky top-0 h-screen w-full overflow-hidden" style={{ background: FOG_COLOR }}>
 
                 {/* Canvas — fills entire sticky viewport */}

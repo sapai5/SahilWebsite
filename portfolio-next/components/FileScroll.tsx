@@ -241,7 +241,13 @@ export default function FileScroll() {
                 if (el) {
                     el.style.transition = "opacity 0.6s ease";
                     el.style.opacity = "0";
-                    setTimeout(() => { if (el) el.style.display = "none"; }, 700);
+                    setTimeout(() => {
+                        if (el) el.style.display = "none";
+                        // Re-draw after overlay hides — fixes white flash if
+                        // the first drawFrame(0) was a no-op because the canvas
+                        // wasn't sized yet when the initial image loaded.
+                        drawFrame(Math.max(0, lastFrameRef.current));
+                    }, 700);
                 }
             }
         };

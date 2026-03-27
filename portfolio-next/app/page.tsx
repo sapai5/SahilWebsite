@@ -9,6 +9,7 @@ import {
 } from "framer-motion";
 import FileScroll from "@/components/FileScroll";
 import ProjectCarousel from "@/components/ProjectCarousel";
+import FloatingBackground from "@/components/FloatingBackground";
 
 /* ─────────────────────────────────────────
    ANIMATION UTILITIES
@@ -211,9 +212,9 @@ function IconAveva({ className = "w-5 h-5" }) {
 function GlassCard({ children, className = "", hover = true }: { children: React.ReactNode; className?: string; hover?: boolean }) {
   return (
     <motion.div
-      whileHover={hover ? { scale: 1.01, boxShadow: "0 8px 40px rgba(0,0,0,0.07)" } : undefined}
+      whileHover={hover ? { scale: 1.01, boxShadow: "0 12px 60px rgba(0,0,0,0.10)" } : undefined}
       transition={{ duration: 0.3, ease: EASE }}
-      className={`rounded-3xl border border-black/[0.07] bg-white/70 backdrop-blur-xl shadow-sm ${hover ? "hover:bg-white/90 hover:border-black/[0.12] transition-colors duration-400" : ""} ${className}`}
+      className={`rounded-3xl border border-white/60 bg-white/75 backdrop-blur-2xl shadow-md ${hover ? "hover:bg-white/90 hover:border-white/80 transition-colors duration-400" : ""} ${className}`}
     >
       {children}
     </motion.div>
@@ -231,8 +232,8 @@ function GlassButton({ href, children, primary = false }: { href: string; childr
       whileTap={{ scale: 0.97 }}
       transition={{ duration: 0.2, ease: EASE }}
       className={`inline-flex items-center gap-2 px-6 py-3 rounded-full text-sm font-medium tracking-wide transition-colors duration-300 ${primary
-        ? "bg-[#1d1d1f] text-white hover:bg-[#3d3d3f] shadow-sm"
-        : "bg-black/[0.05] backdrop-blur-xl border border-black/[0.1] text-black/60 hover:bg-black/[0.09] hover:text-black/80 hover:border-black/[0.16]"
+        ? "bg-[#1d1d1f] text-white hover:bg-[#3d3d3f] shadow-md"
+        : "bg-white/60 backdrop-blur-2xl border border-white/70 text-black/60 hover:bg-white/85 hover:text-black/80 hover:border-white/90 shadow-sm"
         }`}
     >
       {children}
@@ -449,7 +450,8 @@ export default function Home() {
   const heroHeadingY = useTransform(heroSectionProgress, [0, 1], [0, -60]);
 
   return (
-    <main className="bg-[#F5F5F7] selection:bg-black/10">
+    <main className="bg-[#F5F5F7] selection:bg-black/10 relative">
+      <FloatingBackground />
 
       {/* ══ SCROLL HERO ════════════════════════════════════════════ */}
       <div ref={heroRef} className="relative z-10">
@@ -464,7 +466,7 @@ export default function Home() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2, ease: EASE }}
-          className="sticky top-0 z-40 bg-[#F5F5F7]/75 backdrop-blur-2xl border-b border-black/[0.07]"
+          className="sticky top-0 z-40 bg-white/05 backdrop-blur-xl backdrop-saturate-150 border-b border-white/20 shadow-sm"
         >
           <div className="max-w-6xl mx-auto px-6 md:px-12 h-[52px] flex items-center justify-between">
             <motion.a
@@ -565,7 +567,7 @@ export default function Home() {
                   href="https://linkedin.com/in/sahilapai" target="_blank" rel="noopener"
                   whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                   transition={{ duration: 0.2 }}
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white/60 border border-black/[0.08] text-black/45 hover:text-black/70 hover:bg-white/90 transition-all duration-300 text-sm shadow-sm"
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white/65 border border-white/70 text-black/45 hover:text-black/70 hover:bg-white/90 transition-all duration-300 text-sm shadow-sm backdrop-blur-2xl"
                 >
                   <IconLinkedIn className="w-4 h-4" /> LinkedIn
                 </motion.a>
@@ -573,7 +575,7 @@ export default function Home() {
                   href="https://github.com/sapai5" target="_blank" rel="noopener"
                   whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                   transition={{ duration: 0.2 }}
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white/60 border border-black/[0.08] text-black/45 hover:text-black/70 hover:bg-white/90 transition-all duration-300 text-sm shadow-sm"
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white/65 border border-white/70 text-black/45 hover:text-black/70 hover:bg-white/90 transition-all duration-300 text-sm shadow-sm backdrop-blur-2xl"
                 >
                   <IconGitHub className="w-4 h-4" /> GitHub
                 </motion.a>
@@ -583,14 +585,14 @@ export default function Home() {
 
           {/* Stat strip */}
           <FadeUp delay={0.4} className="mt-20">
-            <StaggerCards className="grid grid-cols-2 md:grid-cols-4 gap-px bg-black/[0.07] rounded-3xl overflow-hidden border border-black/[0.07] shadow-sm">
+            <StaggerCards className="grid grid-cols-2 md:grid-cols-4 gap-px bg-black/[0.06] rounded-3xl overflow-hidden border border-white/60 shadow-md backdrop-blur-xl">
               {[
                 { n: "3", l: "Internships", icon: <IconChip className="w-4 h-4" /> },
                 { n: "$19K", l: "Hackathon winnings", icon: <IconTrophy className="w-4 h-4" /> },
                 { n: "6,000+", l: "Executives addressed", icon: <IconMic className="w-4 h-4" /> },
                 { n: "3.81", l: "GPA — Dean's List", icon: <IconStar className="w-4 h-4" /> },
               ].map((s) => (
-                <StaggerCard key={s.l} className="bg-[#F5F5F7] px-8 py-7 flex flex-col gap-3">
+                <StaggerCard key={s.l} className="bg-white/70 backdrop-blur-xl px-8 py-7 flex flex-col gap-3">
                   <div className="text-black/25">{s.icon}</div>
                   <div className="text-[clamp(1.6rem,3vw,2.2rem)] font-bold tracking-tight text-[#1d1d1f] leading-none">{s.n}</div>
                   <div className="text-[11px] tracking-wide text-black/30">{s.l}</div>
@@ -847,7 +849,7 @@ export default function Home() {
                   rel="noopener noreferrer"
                   whileHover={{ scale: 1.03, y: -4, boxShadow: "0 12px 40px rgba(0,0,0,0.09)" }}
                   transition={{ duration: 0.3, ease: EASE }}
-                  className="group rounded-3xl border border-black/[0.07] bg-white/70 backdrop-blur-xl p-6 hover:bg-white/90 hover:border-black/[0.14] transition-colors duration-300 flex flex-col gap-4 shadow-sm"
+                  className="group rounded-3xl border border-white/60 bg-white/75 backdrop-blur-2xl p-6 hover:bg-white/90 hover:border-white/80 transition-colors duration-300 flex flex-col gap-4 shadow-md"
                 >
                   <div className="flex items-center justify-between">
                     <div className="w-9 h-9 rounded-xl border border-black/[0.08] bg-black/[0.04] flex items-center justify-center text-black/40 group-hover:text-black/65 group-hover:bg-black/[0.07] transition-all duration-300">{c.icon}</div>
@@ -865,7 +867,7 @@ export default function Home() {
 
         {/* ── FOOTER ────────────────────────────────────────────── */}
         <FadeUp>
-          <footer className="border-t border-black/[0.06] py-8">
+          <footer className="border-t border-white/50 py-8 bg-white/30 backdrop-blur-xl">
             <div className="max-w-6xl mx-auto px-6 md:px-12 flex justify-between items-center">
               <span className="text-[11px] tracking-widest text-black/20">Sahil A. Pai</span>
               <span className="text-[11px] text-black/20">© 2026</span>

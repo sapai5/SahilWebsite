@@ -453,9 +453,9 @@ function FlyInIcon({
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: ref,
-    offset: ["start 0.95", "start 0.6"], 
+    offset: ["start 0.95", "start 0.6"],
   });
-  
+
   const smooth = useSpring(scrollYProgress, { stiffness: 80, damping: 20 });
   const isEven = index % 2 === 0;
 
@@ -474,6 +474,153 @@ function FlyInIcon({
         {children}
       </motion.div>
     </div>
+  );
+}
+
+/* ─────────────────────────────────────────
+   TERRAMIND SECTION
+───────────────────────────────────────── */
+function TerraMindSection() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const images = [
+    { src: "/terramind1.jpg", alt: "AVEVA World ASU Slide", objectPosition: "10% center", scale: 1 },
+    { src: "/terramind2.jpg", alt: "On Stage Pitching", objectPosition: "center 10%", scale: 1.5 },
+    { src: "/terramind3.jpg", alt: "With Simone Biles", objectPosition: "center 15%", scale: 1 }
+  ];
+
+  const variants = {
+    active: { x: 0, y: 0, scale: 1, rotate: 0, opacity: 1, zIndex: 30 },
+    next: { x: 0, y: 0, scale: 0.95, rotate: 3, opacity: 1, zIndex: 20 },
+    next2: { x: 0, y: 0, scale: 0.9, rotate: -3, opacity: 1, zIndex: 10 },
+    flipped: { x: 300, y: 50, scale: 1, rotate: 15, opacity: 0, zIndex: 40 },
+  };
+
+  const ChevronLeft = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>;
+  const ChevronRight = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
+
+  return (
+    <section id="leadership" className="max-w-6xl mx-auto px-6 md:px-12 pb-28">
+      <SectionHeader label="Entrepreneurship" title="TerraMind" />
+      <FadeUp>
+        <GlassCard hover={false} className="relative overflow-hidden bg-gradient-to-br from-violet-50/70 to-white/50 border-violet-200/60 p-8 md:p-12">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-300/40 to-transparent" />
+
+          <div className="relative flex flex-col lg:flex-row gap-12 items-center lg:items-center">
+
+            {/* Left Side: Content */}
+            <div className="flex flex-col flex-1 w-full lg:w-1/2 justify-center">
+
+              <div className="flex gap-4 items-start mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-violet-100 border border-violet-200/60 flex items-center justify-center shrink-0">
+                  <IconLayers className="w-6 h-6 text-violet-600" />
+                </div>
+                <div>
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-300/50 bg-emerald-50 text-[10px] tracking-widest uppercase text-emerald-700 font-semibold mb-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Global #1 Winner
+                  </div>
+                  <h3 className="text-xl md:text-2xl font-bold text-[#1d1d1f] tracking-tight">Founder &amp; Keynote Speaker</h3>
+                  <p className="text-sm text-violet-600/70 font-medium mt-1">Tempe, AZ · October 2024 – Present</p>
+                </div>
+              </div>
+
+              <StaggerCards className="flex flex-wrap gap-3 mb-8">
+                {[{ n: "$13K", l: "Prize" }, { n: "95%", l: "Accuracy" }, { n: "100+", l: "Teams beaten" }].map((s) => (
+                  <StaggerCard key={s.l} className="rounded-2xl border border-black/[0.07] bg-white/70 backdrop-blur px-5 py-3 text-center min-w-[80px] shadow-sm flex-1">
+                    <div className="text-lg md:text-xl font-bold tracking-tight text-[#1d1d1f]">{s.n}</div>
+                    <div className="text-[10px] tracking-widest uppercase text-black/40 mt-1 font-semibold">{s.l}</div>
+                  </StaggerCard>
+                ))}
+              </StaggerCards>
+
+              <ul className="space-y-4 mb-8">
+                {[
+                  "Won 1st Place globally at AVEVA EcoTech Emerge AI World Championship — 100+ international teams; attracted Y Combinator angel investor interest.",
+                  "Built AI mining sustainability platform using CNNs & decision trees to predict toxic mineral locations with 95% accuracy.",
+                  "Architected full-stack system with Gemini API, MongoDB, and PostgreSQL — sub-20-second sustainability analysis response times.",
+                  "Delivered keynote on predictive & agentic AI to 6,000+ Fortune 500 executives at AVEVA World Conference, San Francisco.",
+                ].map((b, i) => (
+                  <li key={i} className="flex gap-3 text-sm text-gray-600 leading-relaxed font-medium">
+                    <span className="shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full bg-violet-400" />
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="flex flex-wrap gap-2">
+                {["Gemini API", "CNNs", "Decision Trees", "MongoDB", "PostgreSQL", "Keynote"].map((t, i) => (
+                  <motion.span
+                    key={t}
+                    initial={{ opacity: 0, scale: 0.85 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.4, delay: i * 0.05, ease: EASE }}
+                    className="px-3 py-1.5 rounded-full border border-violet-200/60 bg-violet-50/80 text-xs font-semibold text-violet-700/70 tracking-wide"
+                  >
+                    {t}
+                  </motion.span>
+                ))}
+              </div>
+            </div>
+
+            {/* Right Side: Clickable Photo Stack */}
+            <div className="w-full lg:w-1/2 max-sm:h-[300px] max-w-sm lg:max-w-md relative aspect-[4/3] shrink-0 xl:mr-3 flex flex-col items-center justify-center">
+
+              <div className="relative w-full h-full">
+                {images.map((img, i) => {
+                  const diff = i - activeIndex;
+                  let state = "active";
+                  if (diff < 0) state = "flipped";
+                  else if (diff === 0) state = "active";
+                  else if (diff === 1) state = "next";
+                  else state = "next2";
+
+                  return (
+                    <motion.div
+                      key={img.src}
+                      variants={variants}
+                      initial={false}
+                      animate={state}
+                      transition={{ type: "spring", stiffness: 200, damping: 25 }}
+                      className="absolute inset-0 rounded-2xl overflow-hidden shadow-2xl border border-white/40 origin-center bg-black/5"
+                    >
+                      <img
+                        src={img.src}
+                        alt={img.alt}
+                        className="w-full h-full object-cover pointer-events-none z-10 transition-transform duration-500"
+                        style={{
+                          objectPosition: img.objectPosition,
+                          transform: `scale(${img.scale})`
+                        }}
+                      />
+                    </motion.div>
+                  )
+                })}
+              </div>
+
+              {/* Navigation Arrows */}
+              <div className="absolute -bottom-16 right-0 flex gap-3 z-50">
+                <button
+                  onClick={() => setActiveIndex(v => Math.max(0, v - 1))}
+                  disabled={activeIndex === 0}
+                  className="w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-black/5 flex items-center justify-center shadow-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white transition-all text-black/70 hover:text-black hover:scale-105 active:scale-95"
+                >
+                  <ChevronLeft />
+                </button>
+                <button
+                  onClick={() => setActiveIndex(v => Math.min(images.length - 1, v + 1))}
+                  disabled={activeIndex === images.length - 1}
+                  className="w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-black/5 flex items-center justify-center shadow-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white transition-all text-black/70 hover:text-black hover:scale-105 active:scale-95"
+                >
+                  <ChevronRight />
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+        </GlassCard>
+      </FadeUp>
+    </section>
   );
 }
 
@@ -704,63 +851,7 @@ export default function Home() {
         </section>
 
         {/* ── TERRAMIND ─────────────────────────────────────────── */}
-        <section id="leadership" className="max-w-6xl mx-auto px-6 md:px-12 pb-28">
-          <SectionHeader label="Entrepreneurship" title="TerraMind" />
-          <FadeUp>
-            <GlassCard hover={false} className="relative overflow-hidden border-violet-200/60 p-8 md:p-12 bg-gradient-to-br from-violet-50/70 to-white/50">
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-300/40 to-transparent" />
-              <div className="relative flex flex-col md:flex-row md:items-start md:justify-between gap-8 mb-10">
-                <div className="flex gap-5 items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-violet-100 border border-violet-200/60 flex items-center justify-center shrink-0">
-                    <IconLayers className="w-5 h-5 text-violet-600" />
-                  </div>
-                  <div>
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-300/50 bg-emerald-50 text-[10px] tracking-widest uppercase text-emerald-700 font-semibold mb-3">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Global #1 Winner
-                    </div>
-                    <h3 className="text-xl font-semibold text-[#1d1d1f] tracking-tight">Founder &amp; Keynote Speaker</h3>
-                    <p className="text-sm text-violet-600/60 mt-1">Tempe, AZ · October 2024 – Present</p>
-                  </div>
-                </div>
-                <StaggerCards className="flex gap-3 shrink-0">
-                  {[{ n: "$13K", l: "Prize" }, { n: "95%", l: "Accuracy" }, { n: "100+", l: "Teams beaten" }].map((s) => (
-                    <StaggerCard key={s.l} className="rounded-2xl border border-black/[0.07] bg-white/70 backdrop-blur px-4 py-4 text-center min-w-[76px] shadow-sm">
-                      <div className="text-[1.2rem] font-bold tracking-tight text-[#1d1d1f]">{s.n}</div>
-                      <div className="text-[9px] tracking-widest uppercase text-black/25 mt-1">{s.l}</div>
-                    </StaggerCard>
-                  ))}
-                </StaggerCards>
-              </div>
-              <ul className="relative space-y-3.5 mb-10 ml-[68px]">
-                {[
-                  "Won 1st Place globally at AVEVA EcoTech Emerge AI World Championship — 100+ international teams; attracted Y Combinator angel investor interest.",
-                  "Built AI mining sustainability platform using CNNs & decision trees to predict toxic mineral locations with 95% accuracy.",
-                  "Architected full-stack system with Gemini API, MongoDB, and PostgreSQL — sub-20-second sustainability analysis response times.",
-                  "Delivered keynote on predictive & agentic AI to 6,000+ Fortune 500 executives at AVEVA World Conference, San Francisco.",
-                ].map((b, i) => (
-                  <li key={i} className="flex gap-3 text-[13.5px] text-black/50 leading-relaxed">
-                    <span className="shrink-0 mt-1.5 w-1 h-1 rounded-full bg-violet-400/50" />
-                    <span>{b}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="relative flex flex-wrap gap-2 ml-[68px]">
-                {["Gemini API", "CNNs", "Decision Trees", "MongoDB", "PostgreSQL", "Keynote"].map((t, i) => (
-                  <motion.span
-                    key={t}
-                    initial={{ opacity: 0, scale: 0.85 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    viewport={{ once: false }}
-                    transition={{ duration: 0.4, delay: i * 0.05, ease: EASE }}
-                    className="px-3 py-1 rounded-full border border-violet-200/50 bg-violet-50 text-[11px] text-violet-700/60 tracking-wide"
-                  >
-                    {t}
-                  </motion.span>
-                ))}
-              </div>
-            </GlassCard>
-          </FadeUp>
-        </section>
+        <TerraMindSection />
 
         {/* ── PROJECTS ──────────────────────────────────────────── */}
         <section id="projects" className="pb-28">

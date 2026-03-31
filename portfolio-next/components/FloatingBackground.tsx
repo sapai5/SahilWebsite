@@ -17,6 +17,9 @@ interface Particle {
   size: number;
   rotation: number;
   vRotation: number;
+  phaseX: number;
+  phaseY: number;
+  speed: number;
 }
 
 const BINARY_STRINGS = [
@@ -44,14 +47,14 @@ export default function FloatingBackground() {
     let particles: Particle[] = [];
 
     // Config
-    const NUM_PARTICLES = 49;
+    const NUM_PARTICLES = 55;
     const CONNECTION_DISTANCE = 250;
-    const MIN_CONNECTION_DISTANCE = 80; // net effect — no lines between very close particles
-    const FORCE_RADIUS = 100;
-    const FORCE_MAGNITUDE = 0.2;    // gentle push over large area
-    const MAX_SPEED = 3;
-    const DAMPING = 0.993;           // very smooth deceleration
-    const SPRING_K = 0.000675;     // ~3.3 second return period at 60fps
+    const MIN_CONNECTION_DISTANCE = 70;
+    const FORCE_RADIUS = 150;
+    const FORCE_MAGNITUDE = 0.35;
+    const MAX_SPEED = 2.5;
+    const DAMPING = 0.985;
+    const SPRING_K = 0.0022;
 
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
@@ -61,8 +64,6 @@ export default function FloatingBackground() {
     const initParticles = () => {
       particles = [];
       const { innerWidth, innerHeight } = window;
-
-      // Stratified grid for even distribution
       const cols = Math.ceil(Math.sqrt(NUM_PARTICLES * (innerWidth / innerHeight)));
       const rows = Math.ceil(NUM_PARTICLES / cols);
       const cellW = innerWidth / cols;
@@ -74,44 +75,44 @@ export default function FloatingBackground() {
         for (let col = 0; col < cols; col++) {
           if (count >= NUM_PARTICLES) break outer;
           count++;
-
-          // Place with jitter within cell
-          const px = (col + 0.2 + Math.random() * 0.6) * cellW;
-          const py = (row + 0.2 + Math.random() * 0.6) * cellH;
-
+          const px = (col + 0.1 + Math.random() * 0.8) * cellW;
+          const py = (row + 0.1 + Math.random() * 0.8) * cellH;
           const typeRoll = Math.random();
           let type: Particle["type"] = "dot";
           let text: string | undefined;
           let shape: Particle["shape"] | undefined;
           let size = 1;
 
-          if (typeRoll < 0.58) {
+          if (typeRoll < 0.35) {
             type = "dot";
-            size = Math.random() * 1.5 + 0.5;
-          } else if (binaryCount < 3 && typeRoll < 0.67) {
+            size = Math.random() * 2 + 1;
+          } else if (binaryCount < 3 && typeRoll < 0.42) {
             type = "binary";
             text = BINARY_STRINGS[Math.floor(Math.random() * BINARY_STRINGS.length)];
             size = Math.random() * 12 + 12;
             binaryCount++;
-          } else if (typeRoll < 0.80) {
+          } else if (typeRoll < 0.72) {
             type = "symbol";
             text = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
             size = Math.random() * 14 + 14;
           } else {
             type = "geometry";
             shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-            size = Math.random() * 60 + 30;
+            size = Math.random() * 45 + 15;
           }
 
-          const vx = (Math.random() - 0.5) * 0.7;
-          const vy = (Math.random() - 0.5) * 0.7;
+          const vx = (Math.random() - 0.5) * 0.5;
+          const vy = (Math.random() - 0.5) * 0.5;
 
           particles.push({
             x: px, y: py, homeX: px, homeY: py,
             vx, vy, baseVx: vx, baseVy: vy,
             type, text, shape, size,
             rotation: Math.random() * Math.PI * 2,
-            vRotation: (Math.random() - 0.5) * 0.004,
+            vRotation: (Math.random() - 0.5) * 0.005,
+            phaseX: Math.random() * Math.PI * 2,
+            phaseY: Math.random() * Math.PI * 2,
+            speed: 0.015 + Math.random() * 0.025,
           });
         }
       }
@@ -120,21 +121,31 @@ export default function FloatingBackground() {
     const draw = () => {
       animationFrameId = requestAnimationFrame(draw);
 
-      // Optimization: Pause the expensive particle canvas when scrolled away from Hero to save compute beneath backdrop-blurs
-      if (window.scrollY > window.innerHeight * 2) return;
+      if (window.scrollY > window.innerHeight * 20) return;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.lineWidth = 0.8;
-
       const { width, height } = canvas;
       const mouse = mouseRef.current;
+      const time = Date.now() * 0.001;
 
-      // Update positions
       for (const p of particles) {
-        // Mouse repulsion
         const dx = p.x - mouse.x;
         const dy = p.y - mouse.y;
         const distSq = dx * dx + dy * dy;
+        const mouseDist = Math.sqrt(distSq);
+
+        // Passive float: two harmonics give an organic, non-repeating figure-8 feel.
+        // Scale back when the mouse is nearby so repulsion stays crisp.
+        const mouseInfluence = Math.max(0, 1 - mouseDist / (FORCE_RADIUS * 2));
+        const passiveScale = 1 - mouseInfluence * 0.6; // 1.0 far away → 0.4 near mouse
+        const floatX =
+          Math.sin(time * p.speed + p.phaseX) * 1.1 +
+          Math.sin(time * p.speed * 1.7 + p.phaseY) * 0.5;
+        const floatY =
+          Math.cos(time * p.speed + p.phaseY) * 1.1 +
+          Math.cos(time * p.speed * 1.3 + p.phaseX) * 0.5;
+        p.vx += floatX * passiveScale;
+        p.vy += floatY * passiveScale;
 
         if (distSq < FORCE_RADIUS * FORCE_RADIUS && distSq > 0) {
           const dist = Math.sqrt(distSq);
@@ -143,62 +154,47 @@ export default function FloatingBackground() {
           p.vy += (dy / dist) * force;
         }
 
-        // Clamp speed
         const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
         if (speed > MAX_SPEED) {
           p.vx = (p.vx / speed) * MAX_SPEED;
           p.vy = (p.vy / speed) * MAX_SPEED;
         }
 
-        // Update position
         p.x += p.vx;
         p.y += p.vy;
         p.rotation += p.vRotation;
 
-        // If moving faster than base (i.e. was pushed), damp back to base speed
-        const baseSpeed = Math.sqrt(p.baseVx * p.baseVx + p.baseVy * p.baseVy);
-        if (speed > baseSpeed * 1.3) {
-          p.vx *= DAMPING;
-          p.vy *= DAMPING;
-        } else {
-          // Restore natural drift velocity
-          p.vx += (p.baseVx - p.vx) * 0.02;
-          p.vy += (p.baseVy - p.vy) * 0.02;
-        }
+        // Restore natural drift + constant pull to home
+        p.vx += (p.homeX - p.x) * SPRING_K;
+        p.vy += (p.homeY - p.y) * SPRING_K;
 
-        // Spring return when pushed far from home (~3s return via SPRING_K)
-        const hdx = p.homeX - p.x;
-        const hdy = p.homeY - p.y;
-        const homeDist = Math.sqrt(hdx * hdx + hdy * hdy);
-        const HOME_THRESHOLD = 180;
+        // Velocity restoration
+        p.vx += (p.baseVx - p.vx) * 0.03;
+        p.vy += (p.baseVy - p.vy) * 0.03;
+        p.vx *= DAMPING;
+        p.vy *= DAMPING;
 
-        if (homeDist > HOME_THRESHOLD) {
-          // Progressive spring — stronger the farther away
-          const t = (homeDist - HOME_THRESHOLD) / HOME_THRESHOLD;
-          p.vx += (hdx / homeDist) * SPRING_K * homeDist * (1 + t);
-          p.vy += (hdy / homeDist) * SPRING_K * homeDist * (1 + t);
-        }
-
-        // Wrap around edges — and update home position to match so spring doesn't fire spuriously
-        const pad = 80;
+        // Wrap
+        const pad = 100;
         if (p.x < -pad) { p.x = width + pad; p.homeX = width + pad; }
         if (p.x > width + pad) { p.x = -pad; p.homeX = -pad; }
         if (p.y < -pad) { p.y = height + pad; p.homeY = height + pad; }
         if (p.y > height + pad) { p.y = -pad; p.homeY = -pad; }
-
       }
 
-      // Draw connections for dots and geometry
-      const connectable = particles.filter((p) => p.type === "dot" || p.type === "geometry");
+      // Connections
+      const connectable = particles.filter(p => p.type === "dot" || p.type === "geometry");
       for (let i = 0; i < connectable.length; i++) {
         for (let j = i + 1; j < connectable.length; j++) {
           const dx = connectable[i].x - connectable[j].x;
           const dy = connectable[i].y - connectable[j].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (dist > MIN_CONNECTION_DISTANCE && dist < CONNECTION_DISTANCE) {
+          const distSq = dx * dx + dy * dy;
+          if (distSq < CONNECTION_DISTANCE * CONNECTION_DISTANCE && distSq > MIN_CONNECTION_DISTANCE * MIN_CONNECTION_DISTANCE) {
+            const dist = Math.sqrt(distSq);
             ctx.beginPath();
-            ctx.strokeStyle = `rgba(0, 0, 0, ${0.15 * (1 - dist / CONNECTION_DISTANCE)})`;
+            const opacity = 0.35 * (1 - (dist - MIN_CONNECTION_DISTANCE) / (CONNECTION_DISTANCE - MIN_CONNECTION_DISTANCE));
+            ctx.strokeStyle = `rgba(0, 0, 0, ${Math.max(0, opacity)})`;
+            ctx.lineWidth = 0.8;
             ctx.moveTo(connectable[i].x, connectable[i].y);
             ctx.lineTo(connectable[j].x, connectable[j].y);
             ctx.stroke();
@@ -206,45 +202,36 @@ export default function FloatingBackground() {
         }
       }
 
-      // Draw particles
+      // Draw
       for (const p of particles) {
         ctx.save();
         ctx.translate(p.x, p.y);
-
-        if (p.type === "binary") {
-          ctx.rotate(0.1); // Fixed rotation for binary strings
-        } else {
-          ctx.rotate(p.rotation);
-        }
+        ctx.rotate(p.rotation);
+        ctx.fillStyle = "rgba(0, 0, 0, 0.06)";
 
         if (p.type === "dot") {
           ctx.beginPath();
           ctx.arc(0, 0, p.size, 0, Math.PI * 2);
-          ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
           ctx.fill();
         } else if (p.type === "binary" || p.type === "symbol") {
           ctx.font = `300 ${p.size}px monospace`;
-          ctx.fillStyle = "rgba(0, 0, 0, 0.06)";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText(p.text || "", 0, 0);
         } else if (p.type === "geometry") {
           ctx.strokeStyle = "rgba(0, 0, 0, 0.05)";
-          ctx.lineWidth = 1.0;
+          ctx.lineWidth = 1;
           ctx.beginPath();
-          if (p.shape === "circle") {
-            ctx.arc(0, 0, p.size, 0, Math.PI * 2);
-          } else if (p.shape === "square") {
-            ctx.rect(-p.size / 2, -p.size / 2, p.size, p.size);
-          } else if (p.shape === "triangle") {
+          if (p.shape === "circle") ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+          else if (p.shape === "square") ctx.rect(-p.size / 2, -p.size / 2, p.size, p.size);
+          else if (p.shape === "triangle") {
             ctx.moveTo(0, -p.size);
-            ctx.lineTo(p.size * Math.cos(Math.PI / 6), p.size * Math.sin(Math.PI / 6));
-            ctx.lineTo(-p.size * Math.cos(Math.PI / 6), p.size * Math.sin(Math.PI / 6));
+            ctx.lineTo(p.size * 0.86, p.size * 0.5);
+            ctx.lineTo(-p.size * 0.86, p.size * 0.5);
             ctx.closePath();
           }
           ctx.stroke();
         }
-
         ctx.restore();
       }
     };
@@ -253,26 +240,13 @@ export default function FloatingBackground() {
     initParticles();
     draw();
 
-    let resizeTimeout: NodeJS.Timeout;
-    const handleResize = () => {
-      // Debounce resize to avoid excessive calculations
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
-        resizeCanvas();
-      }, 200);
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-      mouseRef.current = { x: e.clientX, y: e.clientY };
-    };
-
-    window.addEventListener("resize", handleResize);
-    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("resize", resizeCanvas);
+    const handleMM = (e: MouseEvent) => { mouseRef.current = { x: e.clientX, y: e.clientY }; };
+    window.addEventListener("mousemove", handleMM);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
-      window.removeEventListener("mousemove", handleMouseMove);
-      clearTimeout(resizeTimeout);
+      window.removeEventListener("resize", resizeCanvas);
+      window.removeEventListener("mousemove", handleMM);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);
@@ -283,8 +257,8 @@ export default function FloatingBackground() {
       className="fixed inset-0 pointer-events-none z-0"
       aria-hidden="true"
       style={{
-        maskImage: "radial-gradient(ellipse at center, transparent 0%, black 10%)",
-        WebkitMaskImage: "radial-gradient(ellipse at center, transparent 0%, black 10%)",
+        maskImage: "radial-gradient(circle at center, black 0%, transparent 95%)",
+        WebkitMaskImage: "radial-gradient(circle at center, black 0%, transparent 95%)",
       }}
     />
   );

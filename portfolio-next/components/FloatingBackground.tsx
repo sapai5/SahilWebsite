@@ -118,6 +118,11 @@ export default function FloatingBackground() {
     };
 
     const draw = () => {
+      animationFrameId = requestAnimationFrame(draw);
+
+      // Optimization: Pause the expensive particle canvas when scrolled away from Hero to save compute beneath backdrop-blurs
+      if (window.scrollY > window.innerHeight * 2) return;
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.lineWidth = 0.8;
 
@@ -242,8 +247,6 @@ export default function FloatingBackground() {
 
         ctx.restore();
       }
-
-      animationFrameId = requestAnimationFrame(draw);
     };
 
     resizeCanvas();

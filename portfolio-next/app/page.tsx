@@ -7,7 +7,7 @@ import {
   useTransform,
   useSpring,
 } from "framer-motion";
-import FileScroll from "@/components/FileScroll";
+import NodeSystem from "@/components/NodeSystem";
 import ProjectCarousel from "@/components/ProjectCarousel";
 import FloatingBackground from "@/components/FloatingBackground";
 
@@ -197,11 +197,18 @@ function IconIntel({ className = "w-5 h-5" }) {
     </svg>
   );
 }
-function IconAveva({ className = "w-5 h-5" }) {
+function IconAveva({ className = "w-5 h-5", ...props }: any) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+    <svg className={className} viewBox="0 0 150 40" fill="currentColor" {...props}>
       <title>AVEVA</title>
-      <text x="50%" y="65%" font-family="system-ui, sans-serif" font-weight="900" font-size="20" fill="currentColor" text-anchor="middle">A</text>
+      <path d="M22 6 L10 34 H16 L18.5 28 H30.5 L33 34 H39 L27 6 H22 Z M20 23 L24.5 12 L29 23 H20 Z" />
+      <rect x="0" y="24" width="18" height="4" />
+      <path d="M40 6 L51 34 h6 L68 6 H61.5 L54 26 L46.5 6 Z" />
+      <rect x="71" y="6" width="18" height="5" />
+      <rect x="71" y="17.5" width="18" height="5" />
+      <rect x="71" y="29" width="18" height="5" />
+      <path d="M92 6 L103 34 h6 L120 6 H113.5 L106 26 L98.5 6 Z" />
+      <path d="M128 6 L116 34 H122 L124.5 28 H136.5 L139 34 H145 L133 6 H128 Z M126 23 L130.5 12 L135 23 H126 Z" />
     </svg>
   );
 }
@@ -432,6 +439,45 @@ const skills = [
 ];
 
 /* ─────────────────────────────────────────
+   FLY-IN ICON
+───────────────────────────────────────── */
+function FlyInIcon({
+  children,
+  iconBg,
+  index
+}: {
+  children: React.ReactNode;
+  iconBg: string;
+  index: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start 0.95", "start 0.6"], 
+  });
+  
+  const smooth = useSpring(scrollYProgress, { stiffness: 80, damping: 20 });
+  const isEven = index % 2 === 0;
+
+  const y = useTransform(smooth, [0, 1], ["-70vh", "0vh"]);
+  const x = useTransform(smooth, [0, 1], [isEven ? "15vw" : "-15vw", "0vw"]);
+  const scale = useTransform(smooth, [0, 1], [4, 1]);
+  const opacity = useTransform(smooth, [0, 0.4, 1], [0, 1, 1]);
+  const rotate = useTransform(smooth, [0, 1], [isEven ? -45 : 45, 0]);
+
+  return (
+    <div ref={ref} className="relative z-50 shrink-0 w-11 h-11">
+      <motion.div
+        style={{ y, x, scale, opacity, rotate, willChange: "transform, opacity", zIndex: 1000 }}
+        className={`absolute inset-0 rounded-2xl flex items-center justify-center shadow-xl ${iconBg}`}
+      >
+        {children}
+      </motion.div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────
    PAGE
 ───────────────────────────────────────── */
 export default function Home() {
@@ -454,12 +500,12 @@ export default function Home() {
       <FloatingBackground />
 
       {/* ══ SCROLL HERO ════════════════════════════════════════════ */}
-      <div ref={heroRef} className="relative z-10">
-        <FileScroll />
+      <div ref={heroRef} className="relative z-10 w-full">
+        <NodeSystem />
       </div>
 
       {/* ══ RISING CONTENT ═══════════════════════════════════════ */}
-      <motion.div style={{ y: contentY }} className="-mt-[20vh] relative z-0">
+      <motion.div style={{ y: contentY }} className="-mt-[10vh] sm:-mt-[20vh] relative z-0">
 
         {/* ── STICKY NAV ────────────────────────────────────────── */}
         <motion.div
@@ -608,10 +654,18 @@ export default function Home() {
           <StaggerCards className="space-y-5">
             {experiences.map((exp) => (
               <StaggerCard key={exp.company}>
-                <GlassCard className={`relative overflow-hidden bg-gradient-to-br ${exp.accentBg} ${exp.accentBorder} p-8 md:p-10`}>
-                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/[0.06] to-transparent" />
+                <GlassCard className={`relative bg-gradient-to-br ${exp.accentBg} ${exp.accentBorder} p-8 md:p-10`}>
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/[0.06] to-transparent rounded-t-3xl" />
                   <div className="flex flex-col md:flex-row md:items-start gap-6 mb-8">
-                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${exp.iconBg}`}>{exp.icon}</div>
+                    {(exp.company === "Amazon Web Services" || exp.company === "AVEVA" || exp.company === "Intel Corporation") ? (
+                      <FlyInIcon iconBg={exp.iconBg} index={exp.company === "Amazon Web Services" ? 0 : exp.company === "AVEVA" ? 1 : 2}>
+                        {exp.icon}
+                      </FlyInIcon>
+                    ) : (
+                      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${exp.iconBg}`}>
+                        {exp.icon}
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                         <div>

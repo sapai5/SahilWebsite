@@ -47,9 +47,10 @@ export default function FloatingBackground() {
     let particles: Particle[] = [];
 
     // Config
-    const NUM_PARTICLES = 55;
-    const CONNECTION_DISTANCE = 250;
-    const MIN_CONNECTION_DISTANCE = 70;
+    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+    const NUM_PARTICLES = isMobile ? 20 : 55;
+    const CONNECTION_DISTANCE = isMobile ? 150 : 250;
+    const MIN_CONNECTION_DISTANCE = isMobile ? 100 : 70;
     const FORCE_RADIUS = 150;
     const FORCE_MAGNITUDE = 0.35;
     const MAX_SPEED = 2.5;
@@ -83,7 +84,8 @@ export default function FloatingBackground() {
           let shape: Particle["shape"] | undefined;
           let size = 1;
 
-          if (typeRoll < 0.35) {
+          const dotThreshold = isMobile ? 0.1 : 0.35;
+          if (typeRoll < dotThreshold) {
             type = "dot";
             size = Math.random() * 2 + 1;
           } else if (binaryCount < 3 && typeRoll < 0.42) {
@@ -190,6 +192,8 @@ export default function FloatingBackground() {
           const dy = connectable[i].y - connectable[j].y;
           const distSq = dx * dx + dy * dy;
           if (distSq < CONNECTION_DISTANCE * CONNECTION_DISTANCE && distSq > MIN_CONNECTION_DISTANCE * MIN_CONNECTION_DISTANCE) {
+            // Further reduce probability on mobile deterministically to prevent frame-to-frame flickering
+            if (isMobile && (i + j) % 5 !== 0) continue;
             const dist = Math.sqrt(distSq);
             ctx.beginPath();
             const opacity = 0.35 * (1 - (dist - MIN_CONNECTION_DISTANCE) / (CONNECTION_DISTANCE - MIN_CONNECTION_DISTANCE));

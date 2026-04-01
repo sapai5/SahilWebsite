@@ -8,6 +8,7 @@ import { SiDotnet, SiKubernetes, SiIntel } from "react-icons/si";
 import { VscAzure } from "react-icons/vsc";
 import * as THREE from "three";
 import { useScroll, useSpring, useTransform, motion, useInView } from "framer-motion";
+import ScrollPrompt from "./ScrollPrompt";
 
 function IconAveva({ className = "w-5 h-5", ...props }: any) {
     return (
@@ -419,8 +420,8 @@ export default function NodeSystem() {
     // Fade out canvas slightly at end of scroll
     const opacity = useTransform(smoothProgress, [0.8, 1], [1, 0.4]);
 
-    // Animate background color from a slight blue tint to the original light background
-    const bgColor = useTransform(smoothProgress, [0, 0.8], ["#e0f2fe", "#f8f9fa"]);
+    // Animate background color from a more vibrant blue tint to the original light background
+    const bgColor = useTransform(smoothProgress, [0, 0.8], ["#bae6fd", "#f8f9fa"]);
 
     return (
         <div ref={containerRef} className="relative h-[300vh] w-full bg-[#f2f2f2]" style={{ zIndex: 0 }}>
@@ -445,6 +446,9 @@ export default function NodeSystem() {
                     ))}
                 </div>
 
+                {/* Scroll Prompt overlay (shows after inactivity at top) */}
+                <ScrollPrompt scrollYProgress={smoothProgress} />
+
                 {/* Subtle vignette/fog gradient on bottom to blend into page */}
                 <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-[#f5f5f7] to-transparent z-20 pointer-events-none" />
 
@@ -452,7 +456,7 @@ export default function NodeSystem() {
                 <div
                     ref={loadingDivRef}
                     className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-5"
-                    style={{ backgroundColor: "#e0f2fe" }}
+                    style={{ backgroundColor: "#bae6fd" }}
                 >
                     <div className="relative w-9 h-9">
                         <div className="absolute inset-0 rounded-full border-[1.5px] border-black/10" />

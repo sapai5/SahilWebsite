@@ -10,19 +10,19 @@ import * as THREE from "three";
 import { useScroll, useSpring, useTransform, motion, useInView } from "framer-motion";
 
 function IconAveva({ className = "w-5 h-5", ...props }: any) {
-  return (
-    <svg className={className} viewBox="0 0 150 40" fill="currentColor" {...props}>
-      <title>AVEVA</title>
-      <path d="M22 6 L10 34 H16 L18.5 28 H30.5 L33 34 H39 L27 6 H22 Z M20 23 L24.5 12 L29 23 H20 Z" />
-      <rect x="0" y="24" width="18" height="4" />
-      <path d="M40 6 L51 34 h6 L68 6 H61.5 L54 26 L46.5 6 Z" />
-      <rect x="71" y="6" width="18" height="5" />
-      <rect x="71" y="17.5" width="18" height="5" />
-      <rect x="71" y="29" width="18" height="5" />
-      <path d="M92 6 L103 34 h6 L120 6 H113.5 L106 26 L98.5 6 Z" />
-      <path d="M128 6 L116 34 H122 L124.5 28 H136.5 L139 34 H145 L133 6 H128 Z M126 23 L130.5 12 L135 23 H126 Z" />
-    </svg>
-  );
+    return (
+        <svg className={className} viewBox="0 0 150 40" fill="currentColor" {...props}>
+            <title>AVEVA</title>
+            <path d="M22 6 L10 34 H16 L18.5 28 H30.5 L33 34 H39 L27 6 H22 Z M20 23 L24.5 12 L29 23 H20 Z" />
+            <rect x="0" y="24" width="18" height="4" />
+            <path d="M40 6 L51 34 h6 L68 6 H61.5 L54 26 L46.5 6 Z" />
+            <rect x="71" y="6" width="18" height="5" />
+            <rect x="71" y="17.5" width="18" height="5" />
+            <rect x="71" y="29" width="18" height="5" />
+            <path d="M92 6 L103 34 h6 L120 6 H113.5 L106 26 L98.5 6 Z" />
+            <path d="M128 6 L116 34 H122 L124.5 28 H136.5 L139 34 H145 L133 6 H128 Z M126 23 L130.5 12 L135 23 H126 Z" />
+        </svg>
+    );
 }
 
 const AnimationContext = createContext({ flyIn: { current: 0 }, explode: { current: 0 } });

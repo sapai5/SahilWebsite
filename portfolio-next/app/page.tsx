@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import {
   motion,
   useScroll,
@@ -451,9 +451,18 @@ function FlyInIcon({
   index: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   const { scrollYProgress } = useScroll({
     target: ref,
-    offset: ["start 0.95", "start 0.6"],
+    offset: isMobile ? ["start 1.05", "start 0.6"] : ["start 0.95", "start 0.6"],
   });
 
   const smooth = useSpring(scrollYProgress, { stiffness: 80, damping: 20 });
@@ -580,8 +589,17 @@ function TerraMindSection() {
                       variants={variants}
                       initial={false}
                       animate={state}
+                      drag={state === "active" ? "x" : false}
+                      dragConstraints={{ left: 0, right: 0 }}
+                      onDragEnd={(_, info) => {
+                        if (info.offset.x < -80) {
+                          setActiveIndex(v => Math.min(images.length - 1, v + 1));
+                        } else if (info.offset.x > 80) {
+                          setActiveIndex(v => Math.max(0, v - 1));
+                        }
+                      }}
                       transition={{ type: "spring", stiffness: 200, damping: 25 }}
-                      className="absolute inset-0 rounded-2xl overflow-hidden shadow-2xl border border-white/40 origin-center bg-black/5"
+                      className={`absolute inset-0 rounded-2xl overflow-hidden shadow-2xl border border-white/40 origin-center bg-black/5 ${state === "active" ? "cursor-grab active:cursor-grabbing" : ""}`}
                     >
                       <img
                         src={img.src}
@@ -597,8 +615,15 @@ function TerraMindSection() {
                 })}
               </div>
 
-              {/* Navigation Arrows */}
-              <div className="absolute -bottom-16 right-0 flex gap-3 z-50">
+              {/* Mobile Swipe Hint */}
+              <div className="md:hidden mt-10 flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-black/30 animate-pulse">
+                <ChevronLeft />
+                <span>Swipe to flip</span>
+                <ChevronRight />
+              </div>
+
+              {/* Navigation Arrows (Desktop only) */}
+              <div className="absolute -bottom-16 right-0 hidden md:flex gap-3 z-50">
                 <button
                   onClick={() => setActiveIndex(v => Math.max(0, v - 1))}
                   disabled={activeIndex === 0}
@@ -630,9 +655,22 @@ function TerraMindSection() {
 export default function Home() {
   const heroRef = useRef<HTMLDivElement>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    // Force scroll to top on reload to ensure hero starts correctly
+    if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+    window.scrollTo(0, 0);
+  }, []);
+
   const { scrollYProgress: heroProgress } = useScroll({ target: heroRef });
   const smoothHero = useSpring(heroProgress, { stiffness: 100, damping: 28, restDelta: 0.001 });
   const contentY = useTransform(smoothHero, [0.70, 1.0], [220, 0]);
+
+  // Navbar visibility: only appear after hero rise
+  const navOpacity = useTransform(smoothHero, [0.85, 0.95], [0, 1]);
+  const navY = useTransform(smoothHero, [0.85, 0.95], [-20, 0]);
 
   // Hero section heading parallax (moves slower than scroll as user scrolls away)
   const heroSectionRef = useRef<HTMLDivElement>(null);
@@ -646,6 +684,65 @@ export default function Home() {
     <main className="bg-[#F5F5F7] selection:bg-black/10 relative">
       <FloatingBackground />
 
+      {/* ── FIXED NAV (AT ROOT FOR STABILITY) ─────────────────── */}
+      <motion.div
+        style={{ opacity: navOpacity, y: navY, display: useTransform(navOpacity, (v) => v > 0 ? "block" : "none") }}
+        className="fixed top-0 left-0 right-0 z-[100] bg-white/40 backdrop-blur-xl backdrop-saturate-150 border-b border-white/20 shadow-sm"
+      >
+        <div className="max-w-6xl mx-auto px-6 md:px-12 h-[52px] flex items-center justify-between">
+          <motion.a
+            href="#"
+            whileHover={{ opacity: 0.6 }}
+            transition={{ duration: 0.2 }}
+            className="text-[12px] font-medium tracking-wide text-black/35 hover:text-black/60 transition-colors duration-200"
+          >
+            Sahil A. Pai
+          </motion.a>
+          <nav className="hidden md:flex items-center gap-1">
+            {["Experience", "Leadership", "Projects", "Awards", "Contact"].map((s, i) => (
+              <motion.a
+                key={s}
+                href={`#${s.toLowerCase()}`}
+                className="px-4 py-1.5 rounded-full text-[12px] text-black/40 hover:text-black/80 hover:bg-black/[0.05] transition-all duration-200"
+              >
+                {s}
+              </motion.a>
+            ))}
+          </nav>
+          <div className="flex items-center gap-3">
+            <GlassButton href="#contact">Get in touch</GlassButton>
+            <button
+              onClick={() => setMobileNavOpen(o => !o)}
+              className="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-[5px] p-1"
+              aria-label="Toggle menu"
+            >
+              <span className={`block h-[1.5px] w-5 bg-black/50 transition-all duration-300 origin-center ${mobileNavOpen ? "rotate-45 translate-y-[6.5px]" : ""}`} />
+              <span className={`block h-[1.5px] w-5 bg-black/50 transition-all duration-300 ${mobileNavOpen ? "opacity-0 scale-x-0" : ""}`} />
+              <span className={`block h-[1.5px] w-5 bg-black/50 transition-all duration-300 origin-center ${mobileNavOpen ? "-rotate-45 -translate-y-[6.5px]" : ""}`} />
+            </button>
+          </div>
+        </div>
+        <motion.div
+          initial={false}
+          animate={{ height: mobileNavOpen ? "auto" : 0, opacity: mobileNavOpen ? 1 : 0 }}
+          transition={{ duration: 0.28, ease: EASE }}
+          className="md:hidden overflow-hidden border-t border-black/[0.06] bg-white/70 backdrop-blur-2xl"
+        >
+          <nav className="flex flex-col px-6 py-3 gap-1">
+            {["Experience", "Leadership", "Projects", "Awards", "Contact"].map((s) => (
+              <a
+                key={s}
+                href={`#${s.toLowerCase()}`}
+                onClick={() => setMobileNavOpen(false)}
+                className="py-2.5 text-[13px] text-black/50 hover:text-black/80 border-b border-black/[0.05] last:border-0 transition-colors duration-200"
+              >
+                {s}
+              </a>
+            ))}
+          </nav>
+        </motion.div>
+      </motion.div>
+
       {/* ══ SCROLL HERO ════════════════════════════════════════════ */}
       <div ref={heroRef} className="relative z-10 w-full">
         <NodeSystem />
@@ -653,73 +750,6 @@ export default function Home() {
 
       {/* ══ RISING CONTENT ═══════════════════════════════════════ */}
       <motion.div style={{ y: contentY }} className="-mt-[10vh] sm:-mt-[20vh] relative z-0">
-
-        {/* ── STICKY NAV ────────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2, ease: EASE }}
-          className="sticky top-0 z-40 bg-white/05 backdrop-blur-xl backdrop-saturate-150 border-b border-white/20 shadow-sm"
-        >
-          <div className="max-w-6xl mx-auto px-6 md:px-12 h-[52px] flex items-center justify-between">
-            <motion.a
-              href="#"
-              whileHover={{ opacity: 0.6 }}
-              transition={{ duration: 0.2 }}
-              className="text-[12px] font-medium tracking-wide text-black/35 hover:text-black/60 transition-colors duration-200"
-            >
-              Sahil A. Pai
-            </motion.a>
-            {/* Desktop nav */}
-            <nav className="hidden md:flex items-center gap-1">
-              {["Experience", "Leadership", "Projects", "Awards", "Contact"].map((s, i) => (
-                <motion.a
-                  key={s}
-                  href={`#${s.toLowerCase()}`}
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: 0.3 + i * 0.05, ease: EASE }}
-                  className="px-4 py-1.5 rounded-full text-[12px] text-black/40 hover:text-black/80 hover:bg-black/[0.05] transition-all duration-200"
-                >
-                  {s}
-                </motion.a>
-              ))}
-            </nav>
-            <div className="flex items-center gap-3">
-              <GlassButton href="#contact">Get in touch</GlassButton>
-              {/* Hamburger — mobile only */}
-              <button
-                onClick={() => setMobileNavOpen(o => !o)}
-                className="md:hidden flex flex-col justify-center items-center w-8 h-8 gap-[5px] p-1"
-                aria-label="Toggle menu"
-              >
-                <span className={`block h-[1.5px] w-5 bg-black/50 transition-all duration-300 origin-center ${mobileNavOpen ? "rotate-45 translate-y-[6.5px]" : ""}`} />
-                <span className={`block h-[1.5px] w-5 bg-black/50 transition-all duration-300 ${mobileNavOpen ? "opacity-0 scale-x-0" : ""}`} />
-                <span className={`block h-[1.5px] w-5 bg-black/50 transition-all duration-300 origin-center ${mobileNavOpen ? "-rotate-45 -translate-y-[6.5px]" : ""}`} />
-              </button>
-            </div>
-          </div>
-          {/* Mobile dropdown */}
-          <motion.div
-            initial={false}
-            animate={{ height: mobileNavOpen ? "auto" : 0, opacity: mobileNavOpen ? 1 : 0 }}
-            transition={{ duration: 0.28, ease: EASE }}
-            className="md:hidden overflow-hidden border-t border-black/[0.06]"
-          >
-            <nav className="flex flex-col px-6 py-3 gap-1">
-              {["Experience", "Leadership", "Projects", "Awards", "Contact"].map((s) => (
-                <a
-                  key={s}
-                  href={`#${s.toLowerCase()}`}
-                  onClick={() => setMobileNavOpen(false)}
-                  className="py-2.5 text-[13px] text-black/50 hover:text-black/80 border-b border-black/[0.05] last:border-0 transition-colors duration-200"
-                >
-                  {s}
-                </a>
-              ))}
-            </nav>
-          </motion.div>
-        </motion.div>
 
         {/* ── HERO TEXT ─────────────────────────────────────────── */}
         <section ref={heroSectionRef} className="max-w-6xl mx-auto px-6 md:px-12 pt-[22vh] pb-32">

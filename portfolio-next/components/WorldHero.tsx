@@ -35,12 +35,13 @@ import ScrollPrompt from "./ScrollPrompt";
         create and download a world into public/worlds/hero/.
      2. Set NEXT_PUBLIC_HERO_WORLD_URL=/worlds/hero/world.spz (e.g. in .env.local).
 
-   Until then this falls back to a public Spark demo splat so the hero
-   renders out of the box.
+   Defaults to the self-hosted hero world at /worlds/hero/world.spz (committed
+   in public/), so it works in production without any env configuration. Set
+   NEXT_PUBLIC_HERO_WORLD_URL to override (e.g. when testing a new world).
 ───────────────────────────────────────────────────────────────── */
 const HERO_WORLD_URL =
     process.env.NEXT_PUBLIC_HERO_WORLD_URL ||
-    "https://sparkjs.dev/assets/splats/butterfly.spz";
+    "/worlds/hero/world.spz";
 
 /* Orientation + framing of the world. Marble/most splat captures are
    Y-down relative to THREE's Y-up, so we flip 180° about X by default.

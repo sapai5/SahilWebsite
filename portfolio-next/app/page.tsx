@@ -7,9 +7,15 @@ import {
   useTransform,
   useSpring,
 } from "framer-motion";
-import NodeSystem from "@/components/NodeSystem";
+import dynamic from "next/dynamic";
 import ProjectCarousel from "@/components/ProjectCarousel";
 import FloatingBackground from "@/components/FloatingBackground";
+
+// WorldHero renders a World Labs Marble Gaussian-splat world via Spark (WebGL +
+// WASM), so it must run client-side only.
+const WorldHero = dynamic(() => import("@/components/WorldHero"), {
+  ssr: false,
+});
 
 /* ─────────────────────────────────────────
    ANIMATION UTILITIES
@@ -219,9 +225,9 @@ function IconAveva({ className = "w-5 h-5", ...props }: any) {
 function GlassCard({ children, className = "", hover = true }: { children: React.ReactNode; className?: string; hover?: boolean }) {
   return (
     <motion.div
-      whileHover={hover ? { scale: 1.01, boxShadow: "0 12px 60px rgba(0,0,0,0.10)" } : undefined}
+      whileHover={hover ? { scale: 1.01 } : undefined}
       transition={{ duration: 0.3, ease: EASE }}
-      className={`rounded-3xl border border-white/60 bg-white/75 backdrop-blur-2xl shadow-md ${hover ? "hover:bg-white/90 hover:border-white/80 transition-colors duration-400" : ""} ${className}`}
+      className={`rounded-3xl lg-glass ${hover ? "lg-glass-hover" : ""} ${className}`}
     >
       {children}
     </motion.div>
@@ -240,7 +246,7 @@ function GlassButton({ href, children, primary = false }: { href: string; childr
       transition={{ duration: 0.2, ease: EASE }}
       className={`inline-flex items-center gap-2 px-6 py-3 rounded-full text-sm font-medium tracking-wide transition-colors duration-300 ${primary
         ? "bg-[#1d1d1f] text-white hover:bg-[#3d3d3f] shadow-md"
-        : "bg-white/60 backdrop-blur-2xl border border-white/70 text-black/60 hover:bg-white/85 hover:text-black/80 hover:border-white/90 shadow-sm"
+        : "lg-glass lg-glass-hover text-black/60 hover:text-black/85"
         }`}
     >
       {children}
@@ -269,9 +275,9 @@ function SectionHeader({ label, title }: { label: string; title: React.ReactNode
 ───────────────────────────────────────── */
 const experiences = [
   {
-    role: "Software Engineering Intern",
+    role: "Software Development Engineer Intern",
     company: "Amazon Web Services",
-    team: "AWS Elemental",
+    team: "AWS Elemental · MediaPackage",
     period: "May – Aug 2026",
     location: "Portland, OR",
     icon: <IconAWS className="w-5 h-5" />,
@@ -280,10 +286,13 @@ const experiences = [
     iconBg: "bg-orange-100 text-orange-600",
     tagBorder: "border-orange-200/60 text-orange-700/60 bg-orange-50/50",
     bullets: [
-      "Incoming Software Engineering Intern at AWS Elemental.",
+      "Engineered SCTE-35–based clip harvesting for MediaPackage in Kotlin & C++ — letting customers harvest segments via ad-marker cues instead of manual timestamps, across both HLS and DASH adaptive streaming.",
+      "Shipped 2 CRs overhauling the alarm system, surfacing ~40% more previously-missed Sev-2 and Sev-3 incidents.",
+      "Served in the team's on-call rotation, triaging and responding to production incidents.",
+      "Won the org-wide AWS hackathon, earning the Impact Award for greatest potential customer & business value.",
     ],
-    tags: ["AWS", "Software Engineering", "Cloud Computing"],
-    stat: { n: "2026", l: "Start date" },
+    tags: ["Kotlin", "C++", "SCTE-35", "MediaPackage", "HLS / DASH"],
+    stat: { n: "~40%", l: "more Sev-2/3 caught" },
   },
   {
     role: "Software Engineering Intern",
@@ -478,7 +487,7 @@ function FlyInIcon({
     <div ref={ref} className="relative z-50 shrink-0 w-11 h-11">
       <motion.div
         style={{ y, x, scale, opacity, rotate, willChange: "transform, opacity", zIndex: 1000 }}
-        className={`absolute inset-0 rounded-2xl flex items-center justify-center shadow-xl ${iconBg}`}
+        className={`absolute inset-0 rounded-2xl flex items-center justify-center shadow-xl lg-tile ${iconBg}`}
       >
         {children}
       </motion.div>
@@ -511,8 +520,8 @@ function TerraMindSection() {
     <section id="leadership" className="max-w-6xl mx-auto px-6 md:px-12 pb-28">
       <SectionHeader label="Entrepreneurship" title="TerraMind" />
       <FadeUp>
-        <GlassCard hover={false} className="relative overflow-hidden bg-gradient-to-br from-violet-50/70 to-white/50 border-violet-200/60 p-8 md:p-12">
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-300/40 to-transparent" />
+        <GlassCard hover={false} className="relative overflow-hidden p-8 md:p-12">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent" />
 
           <div className="relative flex flex-col lg:flex-row gap-12 items-center lg:items-center">
 
@@ -520,7 +529,7 @@ function TerraMindSection() {
             <div className="flex flex-col flex-1 w-full lg:w-1/2 justify-center">
 
               <div className="flex gap-4 items-start mb-6">
-                <div className="w-12 h-12 rounded-2xl bg-violet-100 border border-violet-200/60 flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-2xl lg-tile bg-violet-100 flex items-center justify-center shrink-0">
                   <IconLayers className="w-6 h-6 text-violet-600" />
                 </div>
                 <div>
@@ -534,7 +543,7 @@ function TerraMindSection() {
 
               <StaggerCards className="flex flex-wrap gap-3 mb-8">
                 {[{ n: "$13K", l: "Prize" }, { n: "95%", l: "Accuracy" }, { n: "100+", l: "Teams beaten" }].map((s) => (
-                  <StaggerCard key={s.l} className="rounded-2xl border border-black/[0.07] bg-white/70 backdrop-blur px-5 py-3 text-center min-w-[80px] shadow-sm flex-1">
+                  <StaggerCard key={s.l} className="rounded-2xl lg-glass px-5 py-3 text-center min-w-[80px] flex-1">
                     <div className="text-lg md:text-xl font-bold tracking-tight text-[#1d1d1f]">{s.n}</div>
                     <div className="text-[10px] tracking-widest uppercase text-black/40 mt-1 font-semibold">{s.l}</div>
                   </StaggerCard>
@@ -563,7 +572,7 @@ function TerraMindSection() {
                     whileInView={{ opacity: 1, scale: 1 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.4, delay: i * 0.05, ease: EASE }}
-                    className="px-3 py-1.5 rounded-full border border-violet-200/60 bg-violet-50/80 text-xs font-semibold text-violet-700/70 tracking-wide"
+                    className="px-3 py-1.5 rounded-full lg-pill text-xs font-semibold text-black/55 tracking-wide"
                   >
                     {t}
                   </motion.span>
@@ -627,14 +636,14 @@ function TerraMindSection() {
                 <button
                   onClick={() => setActiveIndex(v => Math.max(0, v - 1))}
                   disabled={activeIndex === 0}
-                  className="w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-black/5 flex items-center justify-center shadow-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white transition-all text-black/70 hover:text-black hover:scale-105 active:scale-95"
+                  className="w-10 h-10 rounded-full lg-glass lg-glass-hover flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all text-black/70 hover:text-black hover:scale-105 active:scale-95"
                 >
                   <ChevronLeft />
                 </button>
                 <button
                   onClick={() => setActiveIndex(v => Math.min(images.length - 1, v + 1))}
                   disabled={activeIndex === images.length - 1}
-                  className="w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-black/5 flex items-center justify-center shadow-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white transition-all text-black/70 hover:text-black hover:scale-105 active:scale-95"
+                  className="w-10 h-10 rounded-full lg-glass lg-glass-hover flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all text-black/70 hover:text-black hover:scale-105 active:scale-95"
                 >
                   <ChevronRight />
                 </button>
@@ -666,7 +675,7 @@ export default function Home() {
 
   const { scrollYProgress: heroProgress } = useScroll({ target: heroRef });
   const smoothHero = useSpring(heroProgress, { stiffness: 100, damping: 28, restDelta: 0.001 });
-  const contentY = useTransform(smoothHero, [0.70, 1.0], [220, 0]);
+  const contentY = useTransform(smoothHero, [0.84, 1.0], [220, 0]);
 
   // Navbar visibility: only appear after hero rise
   const navOpacity = useTransform(smoothHero, [0.85, 0.95], [0, 1]);
@@ -682,12 +691,14 @@ export default function Home() {
 
   return (
     <main className="bg-[#F5F5F7] selection:bg-black/10 relative">
+      <div className="lg-worldbg" aria-hidden="true" />
+      <div className="lg-ambient" aria-hidden="true" />
       <FloatingBackground />
 
       {/* ── FIXED NAV (AT ROOT FOR STABILITY) ─────────────────── */}
       <motion.div
         style={{ opacity: navOpacity, y: navY, display: useTransform(navOpacity, (v) => v > 0 ? "block" : "none") }}
-        className="fixed top-0 left-0 right-0 z-[100] bg-white/40 backdrop-blur-xl backdrop-saturate-150 border-b border-white/20 shadow-sm"
+        className="fixed top-0 left-0 right-0 z-[100] bg-white/45 backdrop-blur-2xl backdrop-saturate-[180%] border-b border-white/30 shadow-sm"
       >
         <div className="max-w-6xl mx-auto px-6 md:px-12 h-[52px] flex items-center justify-between">
           <motion.a
@@ -726,7 +737,7 @@ export default function Home() {
           initial={false}
           animate={{ height: mobileNavOpen ? "auto" : 0, opacity: mobileNavOpen ? 1 : 0 }}
           transition={{ duration: 0.28, ease: EASE }}
-          className="md:hidden overflow-hidden border-t border-black/[0.06] bg-white/70 backdrop-blur-2xl"
+          className="md:hidden overflow-hidden border-t border-black/[0.06] bg-white/90"
         >
           <nav className="flex flex-col px-6 py-3 gap-1">
             {["Experience", "Leadership", "Projects", "Awards", "Contact"].map((s) => (
@@ -745,7 +756,7 @@ export default function Home() {
 
       {/* ══ SCROLL HERO ════════════════════════════════════════════ */}
       <div ref={heroRef} className="relative z-10 w-full">
-        <NodeSystem />
+        <WorldHero />
       </div>
 
       {/* ══ RISING CONTENT ═══════════════════════════════════════ */}
@@ -759,7 +770,7 @@ export default function Home() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0, ease: EASE }}
             >
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-black/[0.09] bg-white/60 backdrop-blur text-[11px] text-black/40 tracking-wide sm:tracking-widest uppercase mb-8 shadow-sm">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full lg-pill text-[11px] text-black/45 tracking-wide sm:tracking-widest uppercase mb-8">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
                 Available for opportunities
               </div>
@@ -790,7 +801,7 @@ export default function Home() {
                   href="https://linkedin.com/in/sahilapai" target="_blank" rel="noopener"
                   whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                   transition={{ duration: 0.2 }}
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white/65 border border-white/70 text-black/45 hover:text-black/70 hover:bg-white/90 transition-all duration-300 text-sm shadow-sm backdrop-blur-2xl"
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full lg-glass lg-glass-hover text-black/45 hover:text-black/75 transition-all duration-300 text-sm"
                 >
                   <IconLinkedIn className="w-4 h-4" /> LinkedIn
                 </motion.a>
@@ -798,7 +809,7 @@ export default function Home() {
                   href="https://github.com/sapai5" target="_blank" rel="noopener"
                   whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                   transition={{ duration: 0.2 }}
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white/65 border border-white/70 text-black/45 hover:text-black/70 hover:bg-white/90 transition-all duration-300 text-sm shadow-sm backdrop-blur-2xl"
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-full lg-glass lg-glass-hover text-black/45 hover:text-black/75 transition-all duration-300 text-sm"
                 >
                   <IconGitHub className="w-4 h-4" /> GitHub
                 </motion.a>
@@ -808,15 +819,15 @@ export default function Home() {
 
           {/* Stat strip */}
           <FadeUp delay={0.4} className="mt-20">
-            <StaggerCards className="grid grid-cols-2 md:grid-cols-4 gap-px bg-black/[0.06] rounded-3xl overflow-hidden border border-white/60 shadow-md backdrop-blur-xl">
+            <StaggerCards className="grid grid-cols-2 md:grid-cols-4 gap-px rounded-3xl overflow-hidden lg-glass">
               {[
                 { n: "3", l: "Internships", icon: <IconChip className="w-4 h-4" /> },
                 { n: "$19K", l: "Hackathon winnings", icon: <IconTrophy className="w-4 h-4" /> },
                 { n: "6,000+", l: "Executives addressed", icon: <IconMic className="w-4 h-4" /> },
                 { n: "3.81", l: "GPA — Dean's List", icon: <IconStar className="w-4 h-4" /> },
               ].map((s) => (
-                <StaggerCard key={s.l} className="bg-white/70 backdrop-blur-xl px-8 py-7 flex flex-col gap-3">
-                  <div className="text-black/25">{s.icon}</div>
+                <StaggerCard key={s.l} className="bg-white/30 px-8 py-7 flex flex-col gap-3">
+                  <div className="text-black/30">{s.icon}</div>
                   <div className="text-[clamp(1.6rem,3vw,2.2rem)] font-bold tracking-tight text-[#1d1d1f] leading-none">{s.n}</div>
                   <div className="text-[11px] tracking-wide text-black/30">{s.l}</div>
                 </StaggerCard>
@@ -831,15 +842,15 @@ export default function Home() {
           <StaggerCards className="space-y-5">
             {experiences.map((exp) => (
               <StaggerCard key={exp.company}>
-                <GlassCard className={`relative bg-gradient-to-br ${exp.accentBg} ${exp.accentBorder} p-8 md:p-10`}>
-                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/[0.06] to-transparent rounded-t-3xl" />
+                <GlassCard className={`relative p-8 md:p-10`}>
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent rounded-t-3xl" />
                   <div className="flex flex-col md:flex-row md:items-start gap-6 mb-8">
                     {(exp.company === "Amazon Web Services" || exp.company === "AVEVA" || exp.company === "Intel Corporation") ? (
                       <FlyInIcon iconBg={exp.iconBg} index={exp.company === "Amazon Web Services" ? 0 : exp.company === "AVEVA" ? 1 : 2}>
                         {exp.icon}
                       </FlyInIcon>
                     ) : (
-                      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${exp.iconBg}`}>
+                      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 lg-tile ${exp.iconBg}`}>
                         {exp.icon}
                       </div>
                     )}
@@ -851,7 +862,7 @@ export default function Home() {
                           <p className="text-sm text-black/40 mt-0.5">{exp.company}</p>
                         </div>
                         <div className="flex flex-col items-start md:items-end gap-1.5 shrink-0">
-                          <span className="px-3 py-1 rounded-full border border-black/[0.09] bg-white/60 text-[11px] text-black/40 tracking-wide shadow-sm">{exp.period}</span>
+                          <span className="px-3 py-1 rounded-full lg-pill text-[11px] text-black/45 tracking-wide">{exp.period}</span>
                           <span className="text-[11px] text-black/25">{exp.location}</span>
                         </div>
                       </div>
@@ -867,7 +878,7 @@ export default function Home() {
                   </ul>
                   <div className="flex flex-wrap items-center gap-2 pl-[68px]">
                     {exp.tags.map((t) => (
-                      <span key={t} className={`px-3 py-1 rounded-full border text-[11px] tracking-wide ${exp.tagBorder}`}>{t}</span>
+                      <span key={t} className={`px-3 py-1 rounded-full lg-pill text-[11px] tracking-wide text-black/50`}>{t}</span>
                     ))}
                     <div className="ml-auto text-right">
                       <div className="text-lg font-bold text-[#1d1d1f]/70 tracking-tight">{exp.stat.n}</div>
@@ -902,12 +913,12 @@ export default function Home() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ margin: "-40px" }}
                   transition={{ duration: 0.55, delay: idx * 0.07, ease: EASE }}
-                  whileHover={{ y: -6, boxShadow: '0 16px 48px rgba(0,0,0,0.1)' }}
-                  className={`flex-shrink-0 w-[300px] rounded-3xl border bg-gradient-to-br ${p.bg} ${p.border} p-7 flex flex-col backdrop-blur-xl shadow-sm select-none`}
+                  whileHover={{ y: -6 }}
+                  className={`flex-shrink-0 w-[300px] rounded-3xl lg-glass lg-glass-hover p-7 flex flex-col select-none`}
                 >
                   {/* Top row */}
                   <div className="flex items-start justify-between mb-5">
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${p.iconBg} flex-shrink-0`}>
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center lg-tile ${p.iconBg} flex-shrink-0`}>
                       {p.icon}
                     </div>
                     <span className="text-[9px] tracking-widest uppercase text-black/30 text-right leading-tight max-w-[120px]">
@@ -926,7 +937,7 @@ export default function Home() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {p.tags.map((t) => (
-                      <span key={t} className={`px-2.5 py-1 rounded-full border text-[10px] tracking-wide ${p.tagStyle}`}>{t}</span>
+                      <span key={t} className={`px-2.5 py-1 rounded-full lg-pill text-[10px] tracking-wide text-black/55`}>{t}</span>
                     ))}
                   </div>
                 </motion.a>
@@ -958,14 +969,14 @@ export default function Home() {
           <SectionHeader label="Recognition" title="Awards & Honors" />
           <StaggerCards className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { n: "$19K", l: "Hackathon Winnings", sub: "3× Winner · 2024–25", icon: <IconTrophy className="w-5 h-5" />, iconBg: "bg-amber-100 text-amber-600 border-amber-200/60" },
+              { n: "$19K", l: "Hackathon Winnings", sub: "4× Winner · 2024–2026", icon: <IconTrophy className="w-5 h-5" />, iconBg: "bg-amber-100 text-amber-600 border-amber-200/60" },
               { n: "#1", l: "AVEVA AI Championship", sub: "100+ international teams", icon: <IconGlobe className="w-5 h-5" />, iconBg: "bg-violet-100 text-violet-600 border-violet-200/60" },
               { n: "$4K", l: "Andy Grove Scholarship", sub: "Intel · STEM Excellence 2024", icon: <IconBolt className="w-5 h-5" />, iconBg: "bg-blue-100 text-blue-600 border-blue-200/60" },
               { n: "6K+", l: "Executives Addressed", sub: "AVEVA World Conf · SF", icon: <IconMic className="w-5 h-5" />, iconBg: "bg-rose-100 text-rose-600 border-rose-200/60" },
             ].map((a) => (
               <StaggerCard key={a.l}>
                 <GlassCard className="p-7 flex flex-col gap-5">
-                  <div className={`w-10 h-10 rounded-2xl border flex items-center justify-center ${a.iconBg}`}>{a.icon}</div>
+                  <div className={`w-10 h-10 rounded-2xl lg-tile flex items-center justify-center ${a.iconBg}`}>{a.icon}</div>
                   <div>
                     <div className="text-[clamp(1.8rem,3.5vw,2.4rem)] font-bold tracking-tight text-[#1d1d1f] leading-none mb-1">{a.n}</div>
                     <div className="text-[12px] font-medium text-black/55 mb-1">{a.l}</div>
@@ -993,7 +1004,7 @@ export default function Home() {
                       viewport={{ once: false }}
                       transition={{ duration: 0.35, delay: i * 0.04, ease: EASE }}
                       whileHover={{ scale: 1.06, y: -2 }}
-                      className="px-3.5 py-1.5 rounded-full border border-black/[0.08] bg-white/70 text-[12px] text-black/45 hover:text-black/70 hover:border-black/[0.16] hover:bg-white/90 transition-colors duration-200 cursor-default shadow-sm"
+                      className="px-3.5 py-1.5 rounded-full lg-pill text-[12px] text-black/50 hover:text-black/80 transition-colors duration-200 cursor-default"
                     >
                       {item}
                     </motion.span>
@@ -1024,7 +1035,7 @@ export default function Home() {
                   rel="noopener noreferrer"
                   whileHover={{ scale: 1.03, y: -4, boxShadow: "0 12px 40px rgba(0,0,0,0.09)" }}
                   transition={{ duration: 0.3, ease: EASE }}
-                  className="group rounded-3xl border border-white/60 bg-white/75 backdrop-blur-2xl p-6 hover:bg-white/90 hover:border-white/80 transition-colors duration-300 flex flex-col gap-4 shadow-md"
+                  className="group rounded-3xl lg-glass lg-glass-hover p-6 transition-colors duration-300 flex flex-col gap-4"
                 >
                   <div className="flex items-center justify-between">
                     <div className="w-9 h-9 rounded-xl border border-black/[0.08] bg-black/[0.04] flex items-center justify-center text-black/40 group-hover:text-black/65 group-hover:bg-black/[0.07] transition-all duration-300">{c.icon}</div>
@@ -1042,7 +1053,7 @@ export default function Home() {
 
         {/* ── FOOTER ────────────────────────────────────────────── */}
         <FadeUp>
-          <footer className="border-t border-white/50 py-8 bg-white/30 backdrop-blur-xl">
+          <footer className="border-t border-white/50 py-8 bg-white/45">
             <div className="max-w-6xl mx-auto px-6 md:px-12 flex justify-between items-center">
               <span className="text-[11px] tracking-widest text-black/20">Sahil A. Pai</span>
               <span className="text-[11px] text-black/20">© 2026</span>

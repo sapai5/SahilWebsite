@@ -11,7 +11,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Sahil A. Pai — Software Engineer",
   description:
-    "Portfolio of Sahil A. Pai — Software Engineer, Founder of TerraMind, 3× Hackathon Champion, and CS student at ASU Barrett Honors College.",
+    "Portfolio of Sahil A. Pai — Software Engineer, Founder of TerraMind, 4× Hackathon Champion, and CS student at ASU Barrett Honors College.",
 };
 
 export default function RootLayout({

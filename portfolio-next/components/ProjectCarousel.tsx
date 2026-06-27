@@ -15,13 +15,6 @@ import { useRef, useEffect, useCallback } from "react";
 const DEAD_ZONE = 0.20;
 const MAX_SPEED = 14;
 
-const BLUR_OVERLAY = {
-    backdropFilter: "blur(10px)",
-    WebkitBackdropFilter: "blur(10px)",
-} as const;
-
-const MASK_LEFT = "linear-gradient(to right, black 0%, black 30%, transparent 100%)";
-const MASK_RIGHT = "linear-gradient(to left,  black 0%, black 30%, transparent 100%)";
 const FADE_LEFT = "linear-gradient(to right, #F5F5F7 0%, #F5F5F7 10%, transparent 100%)";
 const FADE_RIGHT = "linear-gradient(to left,  #F5F5F7 0%, #F5F5F7 10%, transparent 100%)";
 
@@ -132,19 +125,10 @@ export default function ProjectCarousel({ children }: Props) {
     return (
         <div ref={sectionRef} className="relative overflow-hidden">
 
-            {/* ── Blur overlays ─────── */}
-            <div
-                className="pointer-events-none absolute left-0 top-0 bottom-0 w-12 md:w-40 z-10"
-                style={{ ...BLUR_OVERLAY, WebkitMaskImage: MASK_LEFT, maskImage: MASK_LEFT }}
-            />
-            <div
-                className="pointer-events-none absolute right-0 top-0 bottom-0 w-12 md:w-40 z-10"
-                style={{ ...BLUR_OVERLAY, WebkitMaskImage: MASK_RIGHT, maskImage: MASK_RIGHT }}
-            />
-
-            {/* ── Color fade overlays ── */}
-            <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-8 md:w-24 z-20" style={{ background: FADE_LEFT }} />
-            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 md:w-24 z-20" style={{ background: FADE_RIGHT }} />
+            {/* ── Color fade overlays (no backdrop-filter — it artifacts inside
+                 framer-motion transformed ancestors) ── */}
+            <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-10 md:w-28 z-20" style={{ background: FADE_LEFT }} />
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 md:w-28 z-20" style={{ background: FADE_RIGHT }} />
 
             {/* ── Scroll track ───────────────────────────────── */}
             <div

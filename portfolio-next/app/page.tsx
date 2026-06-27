@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import {
   motion,
   useScroll,
@@ -664,6 +664,11 @@ function TerraMindSection() {
 export default function Home() {
   const heroRef = useRef<HTMLDivElement>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  // Boot splash — present from the first server-rendered paint, lifted once the
+  // (client-only) hero has mounted and taken over the screen. Prevents the
+  // content below from flashing for a frame before the hero loads.
+  const [booting, setBooting] = useState(true);
+  const handleHeroReady = useCallback(() => setBooting(false), []);
 
   useEffect(() => {
     // Force scroll to top on reload to ensure hero starts correctly
@@ -691,6 +696,32 @@ export default function Home() {
 
   return (
     <main className="bg-[#F5F5F7] selection:bg-black/10 relative">
+      {/* Boot splash — covers the first paint until the hero owns the screen.
+          Uses inline styles so it covers even before the stylesheet applies. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 300,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: "#eef1f6",
+          opacity: booting ? 1 : 0,
+          pointerEvents: booting ? "auto" : "none",
+          transition: "opacity 0.5s ease",
+        }}
+      >
+        <div className="relative w-9 h-9">
+          <div className="absolute inset-0 rounded-full border-[1.5px] border-black/10" />
+          <div
+            className="absolute inset-0 rounded-full border-[1.5px] border-transparent border-t-black/40 animate-spin"
+            style={{ animationDuration: "0.75s" }}
+          />
+        </div>
+      </div>
+
       <div className="lg-worldbg" aria-hidden="true" />
       <div className="lg-ambient" aria-hidden="true" />
       <FloatingBackground />
@@ -756,7 +787,7 @@ export default function Home() {
 
       {/* ══ SCROLL HERO ════════════════════════════════════════════ */}
       <div ref={heroRef} className="relative z-10 w-full">
-        <WorldHero />
+        <WorldHero onReady={handleHeroReady} />
       </div>
 
       {/* ══ RISING CONTENT ═══════════════════════════════════════ */}

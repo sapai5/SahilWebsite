@@ -117,11 +117,13 @@ function SplatWorld({
     smooth,
     onProgress,
     onLoad,
+    onIntroComplete,
 }: {
     url: string;
     smooth: MotionValue<number>;
     onProgress: (e: ProgressEvent) => void;
     onLoad: () => void;
+    onIntroComplete: () => void;
 }) {
     const renderer = useThree((s) => s.gl);
     const camera = useThree((s) => s.camera);
@@ -133,6 +135,7 @@ function SplatWorld({
     const { reveal, modifier } = useMemo(() => makeRevealModifier(), []);
     const revealStart = useRef(-1);
     const lastReveal = useRef(-1);
+    const introDone = useRef(false);
     const splatArgs = useMemo(
         () => ({ url, onProgress, onLoad, objectModifiers: [modifier] }),
         [url, onProgress, onLoad, modifier],
@@ -165,6 +168,10 @@ function SplatWorld({
                 0,
                 1,
             );
+            if (introP >= 1 && !introDone.current) {
+                introDone.current = true;
+                onIntroComplete(); // world is built — release scroll lock
+            }
             const exitP = 1 - THREE.MathUtils.smoothstep(p, REVEAL_EXIT_START, 1.0);
             const target = Math.min(introP, exitP);
             if (Math.abs(target - lastReveal.current) > 0.002) {
@@ -312,10 +319,14 @@ function LoadingOverlay({ progress }: { progress: number }) {
 /* ─────────────────────────────────────────────────────────────────
    MAIN HERO
 ───────────────────────────────────────────────────────────────── */
-export default function WorldHero() {
+export default function WorldHero({ onReady }: { onReady?: () => void }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [progress, setProgress] = useState(0);
     const [loaded, setLoaded] = useState(false);
+    // Scroll is locked while the point cloud builds the world, then released.
+    // Only lock if WebGL is available (otherwise there's no reveal to wait for).
+    const [locked, setLocked] = useState(() => isWebGLAvailable());
+    const unlock = useCallback(() => setLocked(false), []);
     // Lazily detect WebGL on first (client-only) render — this component is
     // dynamically imported with ssr:false, so the initializer runs in the browser.
     const [webgl, setWebgl] = useState(() => isWebGLAvailable());
@@ -326,6 +337,34 @@ export default function WorldHero() {
             window.history.scrollRestoration = "manual";
         }
         window.scrollTo(0, 0);
+        // The hero is now mounted and owns the screen — let the page lift its
+        // boot splash (we render our own loading overlay from here on).
+        onReady?.();
+    }, [onReady]);
+
+    // Lock page scroll while the world builds in; release when the intro
+    // completes (driven by the splat reveal in SplatWorld).
+    useEffect(() => {
+        const html = document.documentElement;
+        const body = document.body;
+        if (locked) {
+            html.style.overflow = "hidden";
+            body.style.overflow = "hidden";
+        } else {
+            html.style.overflow = "";
+            body.style.overflow = "";
+        }
+        return () => {
+            html.style.overflow = "";
+            body.style.overflow = "";
+        };
+    }, [locked]);
+
+    // Hard safety net: never keep scroll locked beyond a maximum wait,
+    // regardless of load state.
+    useEffect(() => {
+        const t = setTimeout(() => setLocked(false), 30000);
+        return () => clearTimeout(t);
     }, []);
 
     const { scrollYProgress } = useScroll({ target: containerRef });
@@ -397,6 +436,7 @@ export default function WorldHero() {
                                     smooth={smooth}
                                     onProgress={handleProgress}
                                     onLoad={handleLoad}
+                                    onIntroComplete={unlock}
                                 />
                             </Canvas>
                         </WorldErrorBoundary>

@@ -37,6 +37,13 @@ canvas {
   display: block;
 }
 
+/* Custom cursor: hide native cursor when active (class added only on devices
+   with a fine pointer). */
+html.has-custom-cursor,
+html.has-custom-cursor * {
+  cursor: none !important;
+}
+
 /* ============================================================
    LIQUID GLASS DESIGN SYSTEM
    Frosted, translucent surfaces with specular edge highlights

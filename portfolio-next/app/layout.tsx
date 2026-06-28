@@ -4,6 +4,7 @@ import "./globals.css";
 import SiteBackground from "@/components/SiteBackground";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
+import CustomCursor from "@/components/CustomCursor";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -29,6 +30,7 @@ export default function RootLayout({
         <Nav />
         {children}
         <Footer />
+        <CustomCursor />
       </body>
     </html>
   );

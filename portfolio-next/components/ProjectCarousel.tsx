@@ -15,9 +15,6 @@ import { useRef, useEffect, useCallback } from "react";
 const DEAD_ZONE = 0.20;
 const MAX_SPEED = 14;
 
-const FADE_LEFT = "linear-gradient(to right, #F5F5F7 0%, #F5F5F7 10%, transparent 100%)";
-const FADE_RIGHT = "linear-gradient(to left,  #F5F5F7 0%, #F5F5F7 10%, transparent 100%)";
-
 interface Props { children: React.ReactNode; }
 
 export default function ProjectCarousel({ children }: Props) {
@@ -123,18 +120,18 @@ export default function ProjectCarousel({ children }: Props) {
     }, [onMouseMove, onMouseEnter, onMouseLeave, onTouchStart, onTouchMove, onTouchEnd]);
 
     return (
-        <div ref={sectionRef} className="relative overflow-hidden">
-
-            {/* ── Color fade overlays (no backdrop-filter — it artifacts inside
-                 framer-motion transformed ancestors) ── */}
-            <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-10 md:w-28 z-20" style={{ background: FADE_LEFT }} />
-            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 md:w-28 z-20" style={{ background: FADE_RIGHT }} />
-
-            {/* ── Scroll track ───────────────────────────────── */}
+        <div ref={sectionRef} className="relative">
+            {/* ── Scroll track (edges fade into the background via a CSS mask) ── */}
             <div
                 ref={trackRef}
-                className="flex gap-4 px-8 md:px-20 pb-6 overflow-x-auto"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none", scrollBehavior: "auto" }}
+                className="flex gap-4 px-6 md:px-12 pt-10 pb-14 overflow-x-auto"
+                style={{
+                    scrollbarWidth: "none",
+                    msOverflowStyle: "none",
+                    scrollBehavior: "auto",
+                    maskImage: "linear-gradient(to right, transparent 0, #000 4%, #000 96%, transparent 100%)",
+                    WebkitMaskImage: "linear-gradient(to right, transparent 0, #000 4%, #000 96%, transparent 100%)",
+                }}
             >
                 {children}
             </div>

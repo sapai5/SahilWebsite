@@ -236,8 +236,8 @@ function SplatWorld({
 ───────────────────────────────────────────────────────────────── */
 const BEATS = [
     { from: 0.0, to: 0.18, text: "Sahil A. Pai", sub: "Software Engineer", align: "center" as const },
-    { from: 0.26, to: 0.46, text: "Hobbyist", sub: "", align: "left" as const },
-    { from: 0.54, to: 0.74, text: "PNW resident", sub: "", align: "right" as const },
+    { from: 0.26, to: 0.46, text: "Hobbyist", sub: "Coding, Basketball, Hiking", align: "left" as const },
+    { from: 0.54, to: 0.74, text: "PNW resident", sub: "Based in Portland", align: "right" as const },
     { from: 0.82, to: 1.0, text: "Step inside.", sub: "Scroll to explore", align: "center" as const },
 ];
 

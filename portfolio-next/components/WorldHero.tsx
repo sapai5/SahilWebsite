@@ -14,6 +14,7 @@ import {
     useScroll,
     useSpring,
     useTransform,
+    useMotionValueEvent,
     motion,
     useInView,
     type MotionValue,
@@ -439,8 +440,29 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     // Pause the render loop once the hero scrolls out of view to save GPU.
     const isInView = useInView(containerRef, { margin: "0px 0px 500px 0px" });
 
-    // No opacity fade — the world dissolves back into a point cloud on exit instead.
-    const bgColor = useTransform(smooth, [0, CAM_TURN_END], ["#000000", "#000000"]);
+    // Blend into the page: the black backdrop and the splat canvas fade out over
+    // the final stretch of scroll, revealing the shared fixed SiteBackground that
+    // the page content also sits on — so the two scenes become one continuous
+    // background instead of meeting at a hard seam.
+    const blackoutOpacity = useTransform(smooth, [0.95, 0.99], [1, 0]);
+    const canvasOpacity = useTransform(smooth, [0.95, 0.99], [1, 0]);
+
+    // Chromatic "blend" on exit (igloo.inc-style): as the black backdrop dissolves
+    // into the page background, its RGB channels split apart (+ a frost blur) via
+    // an SVG filter. The aberration ramps up then back down across the blend so it
+    // peaks mid-transition and the final page bg is clean. The blend completes by
+    // 0.99 — before the sticky hero unpins at 1.0 — leaving a settled beat so you
+    // can't scroll into the page content mid-transition. The filter is only
+    // attached while active, so there's no rasterisation cost during the scene.
+    const [caT, setCaT] = useState(0);
+    useMotionValueEvent(smooth, "change", (v) => {
+        // Triangular bump over the blend window [0.95, 0.99], peaking at 0.97.
+        const t = v <= 0.95 || v >= 0.99 ? 0 : 1 - Math.abs((v - 0.97) / 0.02);
+        setCaT(t);
+    });
+    const caActive = caT > 0.001;
+    const caOffset = 26 * caT; // px of R/B channel separation
+    const caBlur = 5 * caT; // px of frost blur
 
     const handleProgress = useCallback((e: ProgressEvent) => {
         if (e.total > 0) {
@@ -464,16 +486,58 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     }, []);
 
     return (
-        <div ref={containerRef} className="relative h-[480vh] w-full">
-            <motion.div
-                className="sticky top-0 h-screen w-full overflow-hidden"
-                style={{ backgroundColor: bgColor }}
-            >
-                {/* Static backdrop — always behind the canvas, and the sole visual
-            if WebGL is unavailable. */}
-                <div
+        <div ref={containerRef} className="relative h-[620vh] w-full">
+            {/* Chromatic-aberration filter (RGB split + frost) for the exit blend */}
+            <svg aria-hidden="true" className="absolute w-0 h-0" focusable="false">
+                <defs>
+                    <filter
+                        id="hero-chroma"
+                        x="-20%"
+                        y="-20%"
+                        width="140%"
+                        height="140%"
+                        colorInterpolationFilters="sRGB"
+                    >
+                        {/* Isolate the red channel and shift it left */}
+                        <feColorMatrix
+                            in="SourceGraphic"
+                            type="matrix"
+                            result="r"
+                            values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"
+                        />
+                        <feOffset in="r" dx={-caOffset} dy="0" result="ro" />
+                        {/* Green channel stays put */}
+                        <feColorMatrix
+                            in="SourceGraphic"
+                            type="matrix"
+                            result="g"
+                            values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"
+                        />
+                        {/* Isolate the blue channel and shift it right */}
+                        <feColorMatrix
+                            in="SourceGraphic"
+                            type="matrix"
+                            result="b"
+                            values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"
+                        />
+                        <feOffset in="b" dx={caOffset} dy="0" result="bo" />
+                        {/* Recombine the channels additively, then frost */}
+                        <feBlend in="ro" in2="g" mode="screen" result="rg" />
+                        <feBlend in="rg" in2="bo" mode="screen" result="rgb" />
+                        <feGaussianBlur in="rgb" stdDeviation={caBlur} />
+                    </filter>
+                </defs>
+            </svg>
+            <div className="sticky top-0 h-screen w-full overflow-hidden">
+                {/* Black backdrop — behind the canvas during the scene, faded out at
+            the end to reveal the shared SiteBackground beneath. The chromatic-
+            aberration filter rides this layer so the black→page-bg blend (not the
+            scene itself) splits into RGB fringes as it dissolves. */}
+                <motion.div
                     className="absolute inset-0"
                     style={{
+                        opacity: blackoutOpacity,
+                        filter: caActive ? "url(#hero-chroma)" : undefined,
                         background:
                             "radial-gradient(120% 120% at 50% 20%, #0a0a12 0%, #050507 55%, #000000 100%)",
                     }}
@@ -481,7 +545,7 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
 
                 {/* Splat world canvas */}
                 {webgl && (
-                    <div className="absolute inset-0">
+                    <motion.div className="absolute inset-0" style={{ opacity: canvasOpacity }}>
                         <WorldErrorBoundary onError={handleError}>
                             <Canvas
                                 frameloop={isInView ? "always" : "demand"}
@@ -502,7 +566,7 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                                 />
                             </Canvas>
                         </WorldErrorBoundary>
-                    </div>
+                    </motion.div>
                 )}
 
                 {/* Text beats */}
@@ -515,12 +579,9 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                 {/* Scroll prompt */}
                 <ScrollPrompt scrollYProgress={smooth} />
 
-                {/* Bottom vignette blends the hero into the page below */}
-                <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black to-transparent z-20 pointer-events-none" />
-
                 {/* Loading overlay */}
                 {webgl && !loaded && <LoadingOverlay progress={progress} />}
-            </motion.div>
+            </div>
         </div>
     );
 }

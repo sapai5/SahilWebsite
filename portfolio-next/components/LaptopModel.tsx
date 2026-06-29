@@ -9,6 +9,10 @@ import * as THREE from "three";
 const MODEL = "/models/classic_laptop/classic_laptop_1k.gltf";
 const SCREEN_MATERIAL = "classic_laptop_screen";
 
+// useGLTF caches the scene across mounts; track which scenes we've already
+// normalized so revisiting the page doesn't re-apply the absolute scale.
+const normalizedScenes = new WeakSet<THREE.Object3D>();
+
 // Screen text orientation toggles — flip just one of these if it reads mirrored.
 const FLIP_U = false;
 const FLIP_V = true;
@@ -159,8 +163,11 @@ function Laptop({ lines, screenNormalRef }: { lines: typeof DEFAULT_LINES; scree
   const sticker = useMemo(() => makeGrungeAwsTexture(), []);
 
   // Normalize the model to a known size + centre it once, so a fixed camera
-  // frames it (no Bounds) and the fly-in transform is predictable.
+  // frames it (no Bounds) and the fly-in transform is predictable. useGLTF
+  // caches the scene across mounts, so guard against re-applying the scale
+  // (which would shrink it on every revisit).
   useLayoutEffect(() => {
+    if (normalizedScenes.has(scene)) return;
     scene.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(scene);
     const size = box.getSize(new THREE.Vector3());
@@ -169,6 +176,7 @@ function Laptop({ lines, screenNormalRef }: { lines: typeof DEFAULT_LINES; scree
     scene.updateMatrixWorld(true);
     const c = new THREE.Box3().setFromObject(scene).getCenter(new THREE.Vector3());
     scene.position.sub(c);
+    normalizedScenes.add(scene);
   }, [scene]);
 
   useLayoutEffect(() => {

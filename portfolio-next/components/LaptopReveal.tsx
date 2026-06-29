@@ -2,19 +2,22 @@
 
 import { useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import type { MotionValue } from "framer-motion";
 
 const LaptopModel = dynamic(() => import("./LaptopModel"), { ssr: false });
 
 /** The laptop lives in a fixed, full-screen layer behind the page content.
  *  At progress 0 it fills the viewport (a big, blurred background laptop);
  *  as progress → 1 it shrinks and moves to overlay `targetRef` (the box slot),
- *  sharpening as it lands, then tracks the box as you scroll. */
+ *  sharpening as it lands, then tracks the box as you scroll.
+ *
+ *  Progress is derived from the target's live bounding rect every frame (NOT
+ *  from a separate framer scroll value). Deriving both the progress AND the
+ *  target position from the same rect in the same frame keeps them perfectly
+ *  consistent, which removes the rubber-banding seen on fast scrolls (where a
+ *  frame-stale progress disagreed with a fresh rect). */
 export default function LaptopReveal({
-  progress,
   targetRef,
 }: {
-  progress: MotionValue<number>;
   targetRef: React.RefObject<HTMLElement | null>;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -25,11 +28,17 @@ export default function LaptopReveal({
       const wrap = wrapRef.current;
       const target = targetRef.current;
       if (wrap && target) {
-        const p = Math.min(1, Math.max(0, progress.get()));
-        const ease = p * p * (3 - 2 * p);
-        const r = target.getBoundingClientRect();
         const W = window.innerWidth || 1;
         const H = window.innerHeight || 1;
+        const r = target.getBoundingClientRect();
+
+        // Reproduce framer's offset ["start end", "center 0.6"] from the rect:
+        //   p = 0 when the box top sits at the viewport bottom (r.top === H)
+        //   p = 1 when the box centre sits at 0.6 of the viewport height
+        const denom = 0.4 * H + r.height / 2 || 1;
+        const p = Math.min(1, Math.max(0, (H - r.top) / denom));
+        const ease = p * p * (3 - 2 * p);
+
         const END_SCALE_MULT = 2.4;
         const END_SHIFT_X = 0.16; // fraction of viewport width, to the right
         const END_SHIFT_Y = 0.05; // fraction of viewport height, downward
@@ -45,7 +54,7 @@ export default function LaptopReveal({
     };
     raf = requestAnimationFrame(update);
     return () => cancelAnimationFrame(raf);
-  }, [progress, targetRef]);
+  }, [targetRef]);
 
   return (
     <div

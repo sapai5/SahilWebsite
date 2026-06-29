@@ -4,7 +4,6 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { EASE, FadeUp, StaggerCards, StaggerCard } from "./primitives";
 import { GlassCard, SectionHeader } from "./glass";
-import { IconLayers } from "./icons";
 
 const ChevronLeft = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
@@ -39,8 +38,9 @@ export function TerraMindSection() {
             {/* Left Side: Content */}
             <div className="flex flex-col flex-1 w-full lg:w-1/2 justify-center">
               <div className="flex gap-4 items-start mb-6">
-                <div className="w-12 h-12 rounded-2xl lg-tile bg-violet-100 flex items-center justify-center shrink-0">
-                  <IconLayers className="w-6 h-6 text-violet-600" />
+                <div className="w-12 h-12 rounded-2xl lg-tile bg-white/80 flex items-center justify-center shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/terramind-logo.png" alt="TerraMind logo" className="w-8 h-8 object-contain" />
                 </div>
                 <div>
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-300/50 bg-emerald-50 text-[10px] tracking-widest uppercase text-emerald-700 font-semibold mb-2">

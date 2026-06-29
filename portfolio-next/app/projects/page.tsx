@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef } from "react";
-import { motion, useScroll } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { motion } from "framer-motion";
 import { EASE, FadeUp, StaggerCards, StaggerCard } from "@/components/primitives";
 import { SectionHeader } from "@/components/glass";
 import ProjectCarousel from "@/components/ProjectCarousel";
@@ -9,14 +10,27 @@ import LaptopReveal from "@/components/LaptopReveal";
 import { projects, skills } from "@/lib/data";
 import { IconGitHub, IconArrow } from "@/components/icons";
 
+const LaptopModel = dynamic(() => import("@/components/LaptopModel"), { ssr: false });
+
 export default function ProjectsPage() {
   const laptopBoxRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: laptopBoxRef, offset: ["start end", "center 0.6"] });
+  // The full-screen fly-in reveal only makes sense on the desktop two-column
+  // layout. On smaller screens it has no slot to shrink into and covers the
+  // whole screen, so we show a small inline laptop in the slot instead.
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window === "undefined" ? true : window.matchMedia("(min-width: 1024px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
   return (
     <main className="relative z-10 pt-28 min-h-screen">
-      {/* Full-screen laptop that shrinks into the box below as you scroll */}
-      <LaptopReveal progress={scrollYProgress} targetRef={laptopBoxRef} />
+      {/* Full-screen laptop that shrinks into the box below as you scroll (desktop only) */}
+      {isDesktop && <LaptopReveal targetRef={laptopBoxRef} />}
 
       {/* Projects */}
       <section id="projects" className="relative z-10 py-20">
@@ -101,8 +115,14 @@ export default function ProjectsPage() {
               </p>
             </div>
           </FadeUp>
-          {/* landing slot for the laptop */}
-          <div ref={laptopBoxRef} className="h-[320px] md:h-[440px]" />
+          {/* landing slot for the laptop (desktop); inline laptop on mobile */}
+          <div ref={laptopBoxRef} className="h-[300px] md:h-[440px]">
+            {!isDesktop && (
+              <div className="h-full w-full">
+                <LaptopModel />
+              </div>
+            )}
+          </div>
         </div>
       </section>
 

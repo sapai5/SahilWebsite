@@ -1,21 +1,34 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useMotionValueEvent, MotionValue } from "framer-motion";
 
 export default function ScrollPrompt({ scrollYProgress }: { scrollYProgress: MotionValue<number> }) {
     const [visible, setVisible] = useState(false);
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Show after 3 s only if still at frame 0; hide the moment scrolling starts
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (scrollYProgress.get() === 0) setVisible(true);
-        }, 3000);
-        return () => clearTimeout(timer);
+    // Re-arm a 1 s inactivity timer; when it fires, show the prompt as long as
+    // we're not at the very end of the hero scroll.
+    const scheduleShow = useCallback(() => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => {
+            if (scrollYProgress.get() < 0.95) setVisible(true);
+        }, 1000);
     }, [scrollYProgress]);
 
-    useMotionValueEvent(scrollYProgress, "change", (v) => {
-        if (v > 0) setVisible(false);
+    // Initial inactivity timer (covers frame 0).
+    useEffect(() => {
+        scheduleShow();
+        return () => {
+            if (timerRef.current) clearTimeout(timerRef.current);
+        };
+    }, [scheduleShow]);
+
+    // Any scroll hides the prompt and restarts the inactivity countdown, so it
+    // reappears after 1 s of stillness anywhere in the hero — not just at frame 0.
+    useMotionValueEvent(scrollYProgress, "change", () => {
+        setVisible(false);
+        scheduleShow();
     });
 
     return (
@@ -27,26 +40,8 @@ export default function ScrollPrompt({ scrollYProgress }: { scrollYProgress: Mot
                 aria-hidden={!visible}
                 className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 pointer-events-none select-none"
             >
-                {/* Outer pill */}
-                <div className="relative flex items-center gap-2.5 px-5 py-3 rounded-full"
-                    style={{
-                        background: "rgba(255,255,255,0.25)",
-                        backdropFilter: "blur(24px) saturate(200%)",
-                        WebkitBackdropFilter: "blur(24px) saturate(200%)",
-                        border: "1px solid rgba(255,255,255,0.4)",
-                        boxShadow: "0 4px 24px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(0,0,0,0.06) inset",
-                    }}
-                >
-                    {/* Pulsing glow behind the pill */}
-                    <span
-                        className="absolute inset-0 rounded-full animate-pulse"
-                        style={{
-                            background: "rgba(255,255,255,0.25)",
-                            filter: "blur(8px)",
-                            animationDuration: "2s",
-                        }}
-                    />
-
+                {/* Liquid-glass pill — matches the site's buttons */}
+                <div className="relative flex items-center gap-2.5 px-5 py-3 rounded-full lg-glass lg-glass-hover">
                     {/* Animated bouncing chevron */}
                     <motion.svg
                         animate={{ y: [0, 4, 0] }}
@@ -57,13 +52,13 @@ export default function ScrollPrompt({ scrollYProgress }: { scrollYProgress: Mot
                         strokeWidth="1.8"
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        className="w-3.5 h-3.5 text-black/50 relative"
+                        className="w-3.5 h-3.5 text-white/70 relative"
                     >
                         <path d="M3 5.5l5 5 5-5" />
                     </motion.svg>
 
                     {/* Label */}
-                    <span className="relative text-[11px] tracking-[0.18em] uppercase text-black/45 font-medium">
+                    <span className="relative text-[11px] tracking-[0.18em] uppercase text-white/65 font-medium">
                         Start scrolling
                     </span>
                 </div>

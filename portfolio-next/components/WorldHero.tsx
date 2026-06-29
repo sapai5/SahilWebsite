@@ -56,21 +56,36 @@ const WORLD_SCALE = 1.4;
    - CAM_BASE_Y:  eye height.
    - CAM_TURN_START: scroll fraction (0–1) at which the turn-around begins.
    If the mountains/waterfall end up swapped, flip CAM_TURN_DIR. */
-const CAM_START_Z = 0.8;
-const CAM_RUN_LEN = 8.0;
+const CAM_START_Z = 1.2;
+const CAM_RUN_LEN = 10.0;
 const CAM_BASE_Y = 0.12;
 const CAM_TURN_START = 0.6;
 const CAM_TURN_END = 0.82; // turn completes here; the fade-out begins after this
 const CAM_TURN_DIR = 1; // +1 or -1 — direction of the 180° turn
 const CAM_CURVE_X = 1.5; // lateral meander amplitude (canyon weave)
 const CAM_CURVE_Y = 0.5; // vertical variance amplitude (rises / dips)
+// Lateral offset of the whole path so it sits in the middle of the canyon
+// rather than buried in the left wall. Positive = shift right; tune to centre.
+const CAM_X_OFFSET = 2.0;
+// Extra eye-height at the start that eases back down to CAM_BASE_Y by
+// CAM_LIFT_EASE of total scroll (so the hero opens looking out from up high).
+const CAM_START_LIFT = 1.0;
+const CAM_LIFT_EASE = 0.4;
+// Scroll-run fraction over which the canyon weave eases in. Keeps the opening a
+// straight forward run instead of an immediate diagonal slide to the side.
+const CAM_MEANDER_EASE = 0.4;
+// Initial look offset (radians) so the hero opens facing the valley rather than
+// the rock wall the path tangent points at. Positive = look left; negate to look
+// right. It eases back to the path heading over the first CAM_YAW_EASE of scroll.
+const CAM_START_YAW = 0.57;
+const CAM_YAW_EASE = 0.25;
 
 // Duration (seconds) of the "point cloud → render" intro bloom.
-const REVEAL_DURATION = 2.2;
+const REVEAL_DURATION = 0.65;
 // How long the point cloud lingers (seconds) before it starts building the world.
-const REVEAL_LINGER = 1.1;
+const REVEAL_LINGER = 0.6;
 // Scroll fraction at which the world dissolves back into a point cloud on exit.
-const REVEAL_EXIT_START = 0.82;
+const REVEAL_EXIT_START = 0.62;
 
 /* ─────────────────────────────────────────────────────────────────
    WEBGL DETECTION
@@ -131,11 +146,12 @@ function SplatWorld({
 
     // Memoize constructor args so R3F doesn't rebuild the renderer/mesh each render.
     const sparkArgs = useMemo(() => ({ renderer }), [renderer]);
-    // "Point cloud → render" reveal modifier + its driving uniform.
-    const { reveal, modifier } = useMemo(() => makeRevealModifier(), []);
+    // "Point cloud → render" reveal modifier + its driving uniforms.
+    const { reveal, camPos, modifier } = useMemo(() => makeRevealModifier(), []);
     const revealStart = useRef(-1);
     const lastReveal = useRef(-1);
     const introDone = useRef(false);
+    const camLocal = useMemo(() => new THREE.Vector3(), []);
     const splatArgs = useMemo(
         () => ({ url, onProgress, onLoad, objectModifiers: [modifier] }),
         [url, onProgress, onLoad, modifier],
@@ -162,7 +178,16 @@ function SplatWorld({
         // in the middle. We only re-run the generator while the value is actually
         // changing, to avoid regenerating every frame when settled.
         if (mesh && mesh.isInitialized) {
-            if (revealStart.current < 0) revealStart.current = t;
+            if (revealStart.current < 0) {
+                revealStart.current = t;
+                // Capture the camera's position in the splat's local space so the
+                // reveal expands from the viewer, using the splats as the depth map.
+                const m = mesh as unknown as THREE.Object3D;
+                m.updateWorldMatrix(true, false);
+                camLocal.copy(camera.position);
+                m.worldToLocal(camLocal);
+                camPos.value.copy(camLocal);
+            }
             const introP = THREE.MathUtils.clamp(
                 (t - revealStart.current - REVEAL_LINGER) / REVEAL_DURATION,
                 0,
@@ -172,8 +197,10 @@ function SplatWorld({
                 introDone.current = true;
                 onIntroComplete(); // world is built — release scroll lock
             }
+            // Ease-in (x^2): the front starts slow and accelerates through depth.
+            const introEased = introP * introP;
             const exitP = 1 - THREE.MathUtils.smoothstep(p, REVEAL_EXIT_START, 1.0);
-            const target = Math.min(introP, exitP);
+            const target = Math.min(introEased, exitP);
             if (Math.abs(target - lastReveal.current) > 0.002) {
                 /* eslint-disable react-hooks/immutability */
                 reveal.value = target;
@@ -191,19 +218,26 @@ function SplatWorld({
         const turnP = THREE.MathUtils.smoothstep(p, CAM_TURN_START, CAM_TURN_END);
 
         // Meandering path that follows the canyon rather than a straight line.
+        // The weave eases in (CAM_MEANDER_EASE) so the opening reads as a forward
+        // run rather than an immediate sideways slide.
+        const meander = THREE.MathUtils.smoothstep(runP, 0, CAM_MEANDER_EASE);
+        const lift = CAM_START_LIFT * (1 - THREE.MathUtils.smoothstep(p, 0, CAM_LIFT_EASE));
         const a = runP * Math.PI;
-        const px = Math.sin(a * 1.4) * CAM_CURVE_X + sway;
-        const py = CAM_BASE_Y + Math.sin(a * 0.8) * CAM_CURVE_Y + bob;
+        const px = CAM_X_OFFSET + Math.sin(a * 1.4) * CAM_CURVE_X * meander + sway;
+        const py = CAM_BASE_Y + lift + Math.sin(a * 0.8) * CAM_CURVE_Y * meander + bob;
         const pz = CAM_START_Z - runP * CAM_RUN_LEN;
 
         // Path tangent → the camera looks along the direction it's travelling,
         // so it reads as following the canyon instead of strafing.
-        const tx = Math.cos(a * 1.4) * 1.4 * Math.PI * CAM_CURVE_X;
-        const ty = Math.cos(a * 0.8) * 0.8 * Math.PI * CAM_CURVE_Y;
+        const tx = Math.cos(a * 1.4) * 1.4 * Math.PI * CAM_CURVE_X * meander;
+        const ty = Math.cos(a * 0.8) * 0.8 * Math.PI * CAM_CURVE_Y * meander;
         const tz = -CAM_RUN_LEN;
 
-        // Rotate the heading for the 180° turn-around toward the waterfall at the end.
-        const th = CAM_TURN_DIR * turnP * Math.PI;
+        // Rotate the heading for the 180° turn-around toward the waterfall at the end,
+        // plus an initial yaw so we open looking at the valley (eases out as we run).
+        const startYaw =
+            CAM_START_YAW * (1 - THREE.MathUtils.smoothstep(p, 0, CAM_YAW_EASE));
+        const th = startYaw + CAM_TURN_DIR * turnP * Math.PI;
         const ct = Math.cos(th);
         const st = Math.sin(th);
         const lx = tx * ct + tz * st;
@@ -270,11 +304,11 @@ function TextBeat({
             style={{ opacity, y }}
             className={`absolute bottom-[20%] md:bottom-[15%] z-10 flex flex-col gap-2 md:gap-3 pointer-events-none select-none ${alignClass}`}
         >
-            <span className="text-[clamp(1.5rem,6vw,5rem)] font-black tracking-[-0.04em] text-black/85 leading-none drop-shadow-lg">
+            <span className="text-[clamp(1.5rem,6vw,5rem)] font-black tracking-[-0.04em] text-white/90 leading-none drop-shadow-lg">
                 {beat.text}
             </span>
             {beat.sub && (
-                <span className="text-[clamp(0.65rem,2.5vw,1.1rem)] font-light tracking-[0.12em] md:tracking-[0.18em] uppercase text-black/50 drop-shadow-md">
+                <span className="text-[clamp(0.65rem,2.5vw,1.1rem)] font-light tracking-[0.12em] md:tracking-[0.18em] uppercase text-white/55 drop-shadow-md">
                     {beat.sub}
                 </span>
             )}
@@ -286,29 +320,57 @@ function TextBeat({
    LOADING OVERLAY
 ───────────────────────────────────────────────────────────────── */
 function LoadingOverlay({ progress }: { progress: number }) {
+    // Starts white with dark UI ("Generating world…" reads better light), then
+    // cross-fades to black with light UI as loading nears completion so it
+    // matches the black hero behind it the moment the overlay unmounts.
+    const t = Math.max(0, Math.min(1, (progress - 70) / 30)); // 0 until 70% → 1 at 100%
+    const lerp = (a: number, b: number) => a + (b - a) * t;
+    const bg = `rgb(${lerp(238, 0)}, ${lerp(241, 0)}, ${lerp(246, 0)})`; // #eef1f6 → black
+    const fg = (alpha: number) => `rgba(${lerp(0, 255)}, ${lerp(0, 255)}, ${lerp(0, 255)}, ${alpha})`;
+
     return (
         <div
-            className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-5 transition-opacity duration-500"
-            style={{ backgroundColor: "#eef1f6" }}
+            className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-5"
+            style={{ backgroundColor: bg, transition: "background-color 0.25s linear" }}
         >
             <div className="relative w-9 h-9">
-                <div className="absolute inset-0 rounded-full border-[1.5px] border-black/10" />
                 <div
-                    className="absolute inset-0 rounded-full border-[1.5px] border-transparent border-t-black/40 animate-spin"
-                    style={{ animationDuration: "0.75s" }}
+                    className="absolute inset-0 rounded-full"
+                    style={{ border: `1.5px solid ${fg(0.1)}` }}
+                />
+                <div
+                    className="absolute inset-0 rounded-full animate-spin"
+                    style={{
+                        border: "1.5px solid transparent",
+                        borderTopColor: fg(0.4),
+                        animationDuration: "0.75s",
+                    }}
                 />
             </div>
             <div className="flex flex-col items-center gap-2">
-                <span className="text-[10px] tracking-[0.22em] uppercase text-black/25 font-medium">
+                <span
+                    className="text-[10px] tracking-[0.22em] uppercase font-medium"
+                    style={{ color: fg(0.28) }}
+                >
                     Generating world…
                 </span>
-                <div className="w-36 h-px bg-black/10 overflow-hidden rounded-full">
+                <div
+                    className="w-36 h-px overflow-hidden rounded-full"
+                    style={{ backgroundColor: fg(0.1) }}
+                >
                     <div
-                        className="h-full bg-black/25 rounded-full"
-                        style={{ width: `${progress}%`, transition: "width 0.15s linear" }}
+                        className="h-full rounded-full"
+                        style={{
+                            width: `${progress}%`,
+                            backgroundColor: fg(0.32),
+                            transition: "width 0.15s linear",
+                        }}
                     />
                 </div>
-                <span className="text-[9px] tracking-widest text-black/20 tabular-nums">
+                <span
+                    className="text-[9px] tracking-widest tabular-nums"
+                    style={{ color: fg(0.22) }}
+                >
                     {progress}%
                 </span>
             </div>
@@ -378,7 +440,7 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     const isInView = useInView(containerRef, { margin: "0px 0px 500px 0px" });
 
     // No opacity fade — the world dissolves back into a point cloud on exit instead.
-    const bgColor = useTransform(smooth, [0, CAM_TURN_END], ["#e9eef5", "#f5f5f7"]);
+    const bgColor = useTransform(smooth, [0, CAM_TURN_END], ["#000000", "#000000"]);
 
     const handleProgress = useCallback((e: ProgressEvent) => {
         if (e.total > 0) {
@@ -413,7 +475,7 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                     className="absolute inset-0"
                     style={{
                         background:
-                            "radial-gradient(120% 120% at 50% 20%, #f7f9fc 0%, #dfe6f1 55%, #c7d2e6 100%)",
+                            "radial-gradient(120% 120% at 50% 20%, #0a0a12 0%, #050507 55%, #000000 100%)",
                     }}
                 />
 
@@ -454,7 +516,7 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                 <ScrollPrompt scrollYProgress={smooth} />
 
                 {/* Bottom vignette blends the hero into the page below */}
-                <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-[#f5f5f7] to-transparent z-20 pointer-events-none" />
+                <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black to-transparent z-20 pointer-events-none" />
 
                 {/* Loading overlay */}
                 {webgl && !loaded && <LoadingOverlay progress={progress} />}

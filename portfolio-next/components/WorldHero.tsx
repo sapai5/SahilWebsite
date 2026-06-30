@@ -29,20 +29,25 @@ import ScrollPrompt from "./ScrollPrompt";
 /* ─────────────────────────────────────────────────────────────────
    CONFIG
    ─────────────────────────────────────────────────────────────────
-   Point this at a World Labs Marble world (3D Gaussian splats, .spz).
+   The hero renders a World Labs Marble world (3D Gaussian splats).
 
-   To use your own generated world:
-     1. Run `npm run generate:world` (see scripts/generate-world.mjs) to
-        create and download a world into public/worlds/hero/.
-     2. Set NEXT_PUBLIC_HERO_WORLD_URL=/worlds/hero/world.spz (e.g. in .env.local).
+   Primary source: a pre-built Level-of-Detail tree (.rad) streamed in chunks
+   via `paged: true`. Spark renders only a per-platform splat budget each frame
+   (≈2.5M desktop / 1.5M iOS / 1M Android) regardless of the world's true size
+   (~2.7M splats here), so it runs smoothly on low-end devices the way World
+   Labs' own Marble viewer does — and `paged` fetches only the chunks the
+   current viewpoint needs, so it uses less bandwidth than the full .spz.
 
-   Defaults to the self-hosted hero world at /worlds/hero/world.spz (committed
-   in public/), so it works in production without any env configuration. Set
-   NEXT_PUBLIC_HERO_WORLD_URL to override (e.g. when testing a new world).
-───────────────────────────────────────────────────────────────── */
-const HERO_WORLD_URL =
-    process.env.NEXT_PUBLIC_HERO_WORLD_URL ||
-    "/worlds/hero/world.spz";
+   Build the .rad locally (one-time) and commit it:
+     npm run build-lod -- public/worlds/hero/world.spz --quality --rad-chunked
+   (requires Rust; outputs world-lod.rad + world-lod-N.radc into public/.)
+
+   Fallback: the original .spz with runtime LoD (`lod: true`). Used if the .rad
+   isn't present (HEAD probe fails). Override the fallback path with
+   NEXT_PUBLIC_HERO_WORLD_URL. */
+const HERO_RAD_URL = "/worlds/hero/world-lod.rad";
+const HERO_SPZ_URL =
+    process.env.NEXT_PUBLIC_HERO_WORLD_URL || "/worlds/hero/world.spz";
 
 /* Orientation + framing of the world. Marble/most splat captures are
    Y-down relative to THREE's Y-up, so we flip 180° about X by default.
@@ -130,12 +135,14 @@ class WorldErrorBoundary extends Component<
 ───────────────────────────────────────────────────────────────── */
 function SplatWorld({
     url,
+    paged,
     smooth,
     onProgress,
     onLoad,
     onIntroComplete,
 }: {
     url: string;
+    paged: boolean;
     smooth: MotionValue<number>;
     onProgress: (e: ProgressEvent) => void;
     onLoad: () => void;
@@ -154,8 +161,15 @@ function SplatWorld({
     const introDone = useRef(false);
     const camLocal = useMemo(() => new THREE.Vector3(), []);
     const splatArgs = useMemo(
-        () => ({ url, onProgress, onLoad, objectModifiers: [modifier] }),
-        [url, onProgress, onLoad, modifier],
+        // A pre-built .rad streams its LoD tree in chunks (paged: true); a raw
+        // .spz builds the LoD tree at runtime in a WebWorker (lod: true). Either
+        // way Spark renders only a per-platform splat budget per frame, which is
+        // what lets it run on low-end GPUs like Marble's own viewer.
+        () =>
+            paged
+                ? { url, paged: true as const, onProgress, onLoad, objectModifiers: [modifier] }
+                : { url, lod: true as const, onProgress, onLoad, objectModifiers: [modifier] },
+        [url, paged, onProgress, onLoad, modifier],
     );
 
     // First-person "running" camera, driven by scroll.
@@ -468,6 +482,29 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     // static backdrop (covers software-WebGL fallbacks and GPU-less machines).
     const handlePerfFallback = useCallback(() => setWebgl(false), []);
 
+    // Choose the world source: prefer the streamed LoD tree (.rad), fall back to
+    // the raw .spz with runtime LoD if the .rad isn't deployed. A tiny HEAD probe
+    // of the 5 KB .rad header decides, since SplatMesh has no onError hook.
+    const [world, setWorld] = useState<{ url: string; paged: boolean } | null>(null);
+    useEffect(() => {
+        let cancelled = false;
+        fetch(HERO_RAD_URL, { method: "HEAD" })
+            .then((res) => {
+                if (cancelled) return;
+                setWorld(
+                    res.ok
+                        ? { url: HERO_RAD_URL, paged: true }
+                        : { url: HERO_SPZ_URL, paged: false },
+                );
+            })
+            .catch(() => {
+                if (!cancelled) setWorld({ url: HERO_SPZ_URL, paged: false });
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     useEffect(() => {
         // Force scroll to top on reload so the hero starts at the beginning.
         if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
@@ -632,13 +669,16 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                                     powerPreference: "high-performance",
                                 }}
                             >
-                                <SplatWorld
-                                    url={HERO_WORLD_URL}
-                                    smooth={smooth}
-                                    onProgress={handleProgress}
-                                    onLoad={handleLoad}
-                                    onIntroComplete={handleIntroComplete}
-                                />
+                                {world && (
+                                    <SplatWorld
+                                        url={world.url}
+                                        paged={world.paged}
+                                        smooth={smooth}
+                                        onProgress={handleProgress}
+                                        onLoad={handleLoad}
+                                        onIntroComplete={handleIntroComplete}
+                                    />
+                                )}
                                 <PerfGuard armed={perfArmed} onFallback={handlePerfFallback} />
                             </Canvas>
                         </WorldErrorBoundary>

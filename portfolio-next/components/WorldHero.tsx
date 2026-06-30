@@ -267,6 +267,65 @@ function SplatWorld({
 }
 
 /* ─────────────────────────────────────────────────────────────────
+   PERFORMANCE GUARD — adaptive quality / fallback
+   ─────────────────────────────────────────────────────────────────
+   Samples FPS once the scene is interactive. If it stays low (weak/integrated
+   GPU, or a software-WebGL fallback as on a GPU-less Windows box), it first
+   drops the render resolution a step at a time, then — if still too slow — bails
+   to the static backdrop via onFallback. Lives inside the Canvas so it can use
+   the R3F render loop and setDpr.
+───────────────────────────────────────────────────────────────── */
+const PERF_LOW_FPS = 30; // below this is "too slow"
+const PERF_WARMUP_MS = 1200; // ignore the first beat after intro (things settling)
+const PERF_LOW_STREAK = 2; // consecutive low-FPS seconds before acting (ignore hitches)
+const DPR_STEPS = [1.0, 0.7]; // progressive resolution drops below the initial cap
+
+function PerfGuard({ armed, onFallback }: { armed: boolean; onFallback: () => void }) {
+    const setDpr = useThree((s) => s.setDpr);
+    const frames = useRef(0);
+    const windowStart = useRef(0);
+    const warmupStart = useRef(0);
+    const lowStreak = useRef(0);
+    const step = useRef(-1); // -1 = initial cap; indexes into DPR_STEPS as it degrades
+
+    useFrame(() => {
+        if (!armed) return;
+        const now = performance.now();
+        if (warmupStart.current === 0) {
+            warmupStart.current = now;
+            windowStart.current = now;
+            return;
+        }
+        if (now - warmupStart.current < PERF_WARMUP_MS) return;
+
+        frames.current++;
+        const dt = now - windowStart.current;
+        if (dt < 1000) return; // measure in ~1s windows
+
+        const fps = (frames.current * 1000) / dt;
+        frames.current = 0;
+        windowStart.current = now;
+
+        if (fps >= PERF_LOW_FPS) {
+            lowStreak.current = 0;
+            return;
+        }
+        lowStreak.current += 1;
+        if (lowStreak.current < PERF_LOW_STREAK) return;
+        lowStreak.current = 0;
+
+        if (step.current < DPR_STEPS.length - 1) {
+            step.current += 1;
+            setDpr(DPR_STEPS[step.current]); // lower resolution and re-measure
+        } else {
+            onFallback(); // exhausted resolution drops — fall back to static
+        }
+    });
+
+    return null;
+}
+
+/* ─────────────────────────────────────────────────────────────────
    TEXT BEATS — fade in/out across scroll progress
 ───────────────────────────────────────────────────────────────── */
 const BEATS = [
@@ -389,10 +448,25 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     // Scroll is locked while the point cloud builds the world, then released.
     // Only lock if WebGL is available (otherwise there's no reveal to wait for).
     const [locked, setLocked] = useState(() => isWebGLAvailable());
-    const unlock = useCallback(() => setLocked(false), []);
+    // Arm the adaptive performance guard once the scene is interactive.
+    const [perfArmed, setPerfArmed] = useState(false);
+    const handleIntroComplete = useCallback(() => {
+        setLocked(false);
+        setPerfArmed(true);
+    }, []);
     // Lazily detect WebGL on first (client-only) render — this component is
     // dynamically imported with ssr:false, so the initializer runs in the browser.
     const [webgl, setWebgl] = useState(() => isWebGLAvailable());
+    // #1 — cap the render resolution. Full-DPI (2×+) rendering of a splat cloud is
+    // brutal on weak/integrated GPUs; clamping is a cheap 2–4× win with little
+    // visible loss. The PerfGuard drops it further at runtime if needed.
+    const initialDpr = useMemo(
+        () => Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 1.5),
+        [],
+    );
+    // #3 — if rendering stays too slow even after lowering resolution, bail to the
+    // static backdrop (covers software-WebGL fallbacks and GPU-less machines).
+    const handlePerfFallback = useCallback(() => setWebgl(false), []);
 
     useEffect(() => {
         // Force scroll to top on reload so the hero starts at the beginning.
@@ -549,6 +623,7 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                         <WorldErrorBoundary onError={handleError}>
                             <Canvas
                                 frameloop={isInView ? "always" : "demand"}
+                                dpr={initialDpr}
                                 camera={{ position: [0, CAM_BASE_Y, CAM_START_Z], fov: 68 }}
                                 flat
                                 gl={{
@@ -562,8 +637,9 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                                     smooth={smooth}
                                     onProgress={handleProgress}
                                     onLoad={handleLoad}
-                                    onIntroComplete={unlock}
+                                    onIntroComplete={handleIntroComplete}
                                 />
+                                <PerfGuard armed={perfArmed} onFallback={handlePerfFallback} />
                             </Canvas>
                         </WorldErrorBoundary>
                     </motion.div>

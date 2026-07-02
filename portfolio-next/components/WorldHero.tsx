@@ -94,16 +94,38 @@ const REVEAL_LINGER = 0.6;
 const REVEAL_EXIT_START = 0.62;
 
 /* ─────────────────────────────────────────────────────────────────
-   WEBGL DETECTION
+   SPLAT CAPABILITY DETECTION
+   ─────────────────────────────────────────────────────────────────
+   Spark needs WebGL2. The dangerous case is a device that *has* WebGL2 but
+   only in software (SwiftShader / llvmpipe / "Microsoft Basic Render Driver"),
+   e.g. a Windows box with no usable GPU or with hardware acceleration disabled.
+   There, rendering 2.7M splats on the CPU spikes memory past 1 GB and freezes
+   the tab into a black screen before the adaptive PerfGuard ever gets a frame
+   to react. So we detect and reject those up front and serve the static hero.
 ───────────────────────────────────────────────────────────────── */
-function isWebGLAvailable(): boolean {
+const SOFTWARE_RENDERER_RE =
+    /swiftshader|llvmpipe|software|basic render|microsoft basic|angle \(software/i;
+
+function isSplatCapable(): boolean {
     if (typeof window === "undefined") return false;
     try {
         const canvas = document.createElement("canvas");
-        return !!(
-            window.WebGLRenderingContext &&
-            (canvas.getContext("webgl") || canvas.getContext("experimental-webgl"))
-        );
+        const gl = canvas.getContext("webgl2");
+        if (!gl) return false; // Spark requires WebGL2
+
+        // Reject CPU/software WebGL2 implementations — they freeze on splat scenes.
+        const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+        if (dbg) {
+            const renderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "");
+            if (SOFTWARE_RENDERER_RE.test(renderer)) return false;
+        }
+
+        // Reject devices with too little RAM to hold the splat buffers (Chromium
+        // only; undefined elsewhere, in which case we don't gate on it).
+        const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+        if (typeof mem === "number" && mem > 0 && mem < 2) return false;
+
+        return true;
     } catch {
         return false;
     }
@@ -460,17 +482,18 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     const [progress, setProgress] = useState(0);
     const [loaded, setLoaded] = useState(false);
     // Scroll is locked while the point cloud builds the world, then released.
-    // Only lock if WebGL is available (otherwise there's no reveal to wait for).
-    const [locked, setLocked] = useState(() => isWebGLAvailable());
+    // Only lock if the device can actually render splats (otherwise there's no
+    // reveal to wait for and we go straight to the static hero).
+    const [locked, setLocked] = useState(() => isSplatCapable());
     // Arm the adaptive performance guard once the scene is interactive.
     const [perfArmed, setPerfArmed] = useState(false);
     const handleIntroComplete = useCallback(() => {
         setLocked(false);
         setPerfArmed(true);
     }, []);
-    // Lazily detect WebGL on first (client-only) render — this component is
-    // dynamically imported with ssr:false, so the initializer runs in the browser.
-    const [webgl, setWebgl] = useState(() => isWebGLAvailable());
+    // Lazily detect splat capability on first (client-only) render — this
+    // component is dynamically imported with ssr:false, so this runs in the browser.
+    const [webgl, setWebgl] = useState(() => isSplatCapable());
     // #1 — cap the render resolution. Full-DPI (2×+) rendering of a splat cloud is
     // brutal on weak/integrated GPUs; clamping is a cheap 2–4× win with little
     // visible loss. The PerfGuard drops it further at runtime if needed.
@@ -540,6 +563,17 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
         const t = setTimeout(() => setLocked(false), 30000);
         return () => clearTimeout(t);
     }, []);
+
+    // Load watchdog: if the world never becomes interactive within a budget (a
+    // weak GPU grinding through decode/upload, or a partial stall), bail to the
+    // static backdrop. Unmounting the canvas frees its GPU/heap memory and
+    // unblocks the page. Capable devices reach `perfArmed` in ~1–2s, so this only
+    // fires for devices that are effectively failing.
+    useEffect(() => {
+        if (!webgl || perfArmed) return;
+        const t = setTimeout(() => handlePerfFallback(), 12000);
+        return () => clearTimeout(t);
+    }, [webgl, perfArmed, handlePerfFallback]);
 
     const { scrollYProgress } = useScroll({ target: containerRef });
     const smooth = useSpring(scrollYProgress, {

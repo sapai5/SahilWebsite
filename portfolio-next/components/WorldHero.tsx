@@ -14,7 +14,9 @@ import {
     useScroll,
     useSpring,
     useTransform,
+    useMotionValue,
     useMotionValueEvent,
+    animate,
     motion,
     useInView,
     type MotionValue,
@@ -181,6 +183,7 @@ function SplatWorld({
     onProgress,
     onLoad,
     onIntroComplete,
+    onContextLost,
 }: {
     url: string;
     paged: boolean;
@@ -189,17 +192,26 @@ function SplatWorld({
     onProgress: (e: ProgressEvent) => void;
     onLoad: () => void;
     onIntroComplete: () => void;
+    onContextLost: () => void;
 }) {
     const renderer = useThree((s) => s.gl);
     const camera = useThree((s) => s.camera);
+    const invalidate = useThree((s) => s.invalidate);
     const meshRef = useRef<SparkSplatMesh>(null);
 
     // Memoize constructor args so R3F doesn't rebuild the renderer/mesh each render.
-    // On the Direct3D/Windows path, render a much smaller LoD splat budget
-    // (lodSplatScale) — fragment overdraw + the per-frame sort are the render
-    // bottleneck there, and D3D11 handles them far less efficiently than Metal.
+    //  • maxStdDev < default √8 shrinks each splat's Gaussian footprint, cutting
+    //    fragment overdraw (the dominant cost on the Direct3D/Windows blend path)
+    //    with a perceptually minor change. √5 is Spark's recommended value.
+    //  • On Direct3D/Windows, also render a smaller LoD splat budget so there's
+    //    less to sort (Spark reads splat distances back from the GPU each frame,
+    //    which is slow on ANGLE/D3D11).
     const sparkArgs = useMemo(
-        () => ({ renderer, lodSplatScale: liveReveal ? 1.0 : 0.45 }),
+        () => ({
+            renderer,
+            maxStdDev: Math.sqrt(5),
+            lodSplatScale: liveReveal ? 1.0 : 0.6,
+        }),
         [renderer, liveReveal],
     );
     // "Point cloud → render" reveal modifier + its driving uniforms.
@@ -221,6 +233,29 @@ function SplatWorld({
     // First-person "running" camera, driven by scroll.
     const lookTarget = useMemo(() => new THREE.Vector3(0, CAM_BASE_Y, -1), []);
     const tinted = useRef(false);
+
+    // Render on every scroll change even in "demand" frameloop, so scrolling back
+    // into the hero always repaints (otherwise it can return to a stale/black
+    // canvas on Windows).
+    useEffect(() => {
+        const unsub = smooth.on("change", () => invalidate());
+        return () => unsub();
+    }, [smooth, invalidate]);
+
+    // WebGL context loss (e.g. Windows TDR resetting the GPU driver after a heavy
+    // frame) otherwise leaves a permanently black canvas. Prevent the default so
+    // the browser can recover, and fall back to the static backdrop so the visitor
+    // never gets stuck on black.
+    useEffect(() => {
+        const canvas = renderer.domElement;
+        const onLost = (e: Event) => {
+            e.preventDefault();
+            onContextLost();
+        };
+        canvas.addEventListener("webglcontextlost", onLost);
+        return () => canvas.removeEventListener("webglcontextlost", onLost);
+    }, [renderer, onContextLost]);
+
     useFrame((state, delta) => {
         const p = smooth.get(); // 0 → 1 across the hero scroll
         const t = state.clock.elapsedTime;
@@ -627,7 +662,20 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     // the page content also sits on — so the two scenes become one continuous
     // background instead of meeting at a hard seam.
     const blackoutOpacity = useTransform(smooth, [0.95, 0.99], [1, 0]);
-    const canvasOpacity = useTransform(smooth, [0.95, 0.99], [1, 0]);
+    const canvasExitOpacity = useTransform(smooth, [0.95, 0.99], [1, 0]);
+    // Entry fade: the point-cloud bloom can't run on the Direct3D/Windows path, so
+    // there we fade the canvas in once loaded. On Metal (liveReveal) the reveal
+    // handles the intro, so this stays at 1.
+    const introFade = useMotionValue(liveReveal ? 1 : 0);
+    const canvasOpacity = useTransform(
+        [canvasExitOpacity, introFade] as MotionValue<number>[],
+        ([exit, intro]: number[]) => exit * intro,
+    );
+    useEffect(() => {
+        if (liveReveal || !loaded) return; // Metal path uses the point-cloud reveal
+        const controls = animate(introFade, 1, { duration: 0.9, ease: [0.22, 1, 0.36, 1] });
+        return () => controls.stop();
+    }, [liveReveal, loaded, introFade]);
 
     // Chromatic "blend" on exit (igloo.inc-style): as the black backdrop dissolves
     // into the page background, its RGB channels split apart (+ a frost blur) via
@@ -749,6 +797,7 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                                         onProgress={handleProgress}
                                         onLoad={handleLoad}
                                         onIntroComplete={handleIntroComplete}
+                                        onContextLost={handlePerfFallback}
                                     />
                                 )}
                                 <PerfGuard armed={perfArmed} onFallback={handlePerfFallback} />

@@ -132,6 +132,35 @@ function isSplatCapable(): boolean {
 }
 
 /* ─────────────────────────────────────────────────────────────────
+   LIVE-REVEAL CAPABILITY
+   ─────────────────────────────────────────────────────────────────
+   Our point-cloud reveal is a Spark objectModifier re-baked every frame
+   (generatorDirty). That's cheap on Metal + unified memory (Mac/iOS) but
+   ruinous on Windows, where WebGL2 runs via ANGLE→Direct3D11 with split memory
+   and a system-side shadow copy: per-frame re-bakes duplicate ~2.7M splats
+   across the bus (>1 GB, OOM → black screen) and the large custom shader stalls
+   the D3D HLSL compiler (freeze). So we only enable the live reveal off the
+   Direct3D path; elsewhere we render the stock LoD world (as Marble does), which
+   is proven to run on the same Windows machines.
+───────────────────────────────────────────────────────────────── */
+function supportsLiveReveal(): boolean {
+    if (typeof navigator === "undefined") return false;
+    // Windows == ANGLE→Direct3D11 backend. Gate on the OS (robust even when the
+    // GL renderer string is privacy-masked).
+    if (/Windows/i.test(navigator.userAgent || "")) return false;
+    // Also catch any explicit Direct3D backend reported by the GL renderer.
+    try {
+        const gl = document.createElement("canvas").getContext("webgl2");
+        const dbg = gl?.getExtension("WEBGL_debug_renderer_info");
+        const r = dbg && gl ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "") : "";
+        if (/direct3d|\bd3d/i.test(r)) return false;
+    } catch {
+        /* ignore — fall through */
+    }
+    return true;
+}
+
+/* ─────────────────────────────────────────────────────────────────
    ERROR BOUNDARY — falls back to a static backdrop if the splat scene
    throws (e.g. WASM/asset failure) instead of blanking the whole page.
 ───────────────────────────────────────────────────────────────── */
@@ -158,6 +187,7 @@ class WorldErrorBoundary extends Component<
 function SplatWorld({
     url,
     paged,
+    liveReveal,
     smooth,
     onProgress,
     onLoad,
@@ -165,6 +195,7 @@ function SplatWorld({
 }: {
     url: string;
     paged: boolean;
+    liveReveal: boolean;
     smooth: MotionValue<number>;
     onProgress: (e: ProgressEvent) => void;
     onLoad: () => void;
@@ -182,17 +213,15 @@ function SplatWorld({
     const lastReveal = useRef(-1);
     const introDone = useRef(false);
     const camLocal = useMemo(() => new THREE.Vector3(), []);
-    const splatArgs = useMemo(
-        // A pre-built .rad streams its LoD tree in chunks (paged: true); a raw
-        // .spz builds the LoD tree at runtime in a WebWorker (lod: true). Either
-        // way Spark renders only a per-platform splat budget per frame, which is
-        // what lets it run on low-end GPUs like Marble's own viewer.
-        () =>
-            paged
-                ? { url, paged: true as const, onProgress, onLoad, objectModifiers: [modifier] }
-                : { url, lod: true as const, onProgress, onLoad, objectModifiers: [modifier] },
-        [url, paged, onProgress, onLoad, modifier],
-    );
+    const splatArgs = useMemo(() => {
+        // Only attach the reveal objectModifier where per-frame re-baking is cheap
+        // (Metal/unified memory). On Direct3D/Windows we render the stock LoD world
+        // (no modifier, no generatorDirty) so it doesn't freeze/OOM.
+        const base = paged
+            ? { url, paged: true as const, onProgress, onLoad }
+            : { url, lod: true as const, onProgress, onLoad };
+        return liveReveal ? { ...base, objectModifiers: [modifier] } : base;
+    }, [url, paged, liveReveal, onProgress, onLoad, modifier]);
 
     // First-person "running" camera, driven by scroll.
     const lookTarget = useMemo(() => new THREE.Vector3(0, CAM_BASE_Y, -1), []);
@@ -203,18 +232,25 @@ function SplatWorld({
 
         // Marble bakes fairly muted color — lift it a touch once the splats load.
         const mesh = meshRef.current as (SparkSplatMesh & { isInitialized?: boolean; recolor?: THREE.Color; generatorDirty?: boolean }) | null;
-        if (mesh && !tinted.current && mesh.isInitialized && mesh.recolor) {
+        if (liveReveal && mesh && !tinted.current && mesh.isInitialized && mesh.recolor) {
             mesh.recolor.setRGB(1.14, 1.1, 1.04); // subtle warm brightness lift
             tinted.current = true;
         }
 
-        // "Point cloud" lifecycle:
-        //  • intro — linger as points, then bloom into the world (time-based)
-        //  • exit  — dissolve back into points as you scroll out (scroll-based)
-        // The visible reveal is the minimum of the two, so the world only exists
-        // in the middle. We only re-run the generator while the value is actually
-        // changing, to avoid regenerating every frame when settled.
-        if (mesh && mesh.isInitialized) {
+        if (!liveReveal) {
+            // Direct3D/Windows path: no per-frame re-baking. Render the stock LoD
+            // world (Marble-parity) and just release the scroll lock once the
+            // splats are initialized. Intro/exit are handled by the canvas opacity
+            // fade instead of a point-cloud reveal.
+            if (mesh && mesh.isInitialized && !introDone.current) {
+                introDone.current = true;
+                onIntroComplete();
+            }
+        } else if (mesh && mesh.isInitialized) {
+            // "Point cloud" lifecycle (Metal/unified-memory only):
+            //  • intro — linger as points, then bloom into the world (time-based)
+            //  • exit  — dissolve back into points as you scroll out (scroll-based)
+            // We only re-run the generator while the value is actually changing.
             if (revealStart.current < 0) {
                 revealStart.current = t;
                 // Capture the camera's position in the splat's local space so the
@@ -494,6 +530,9 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     // Lazily detect splat capability on first (client-only) render — this
     // component is dynamically imported with ssr:false, so this runs in the browser.
     const [webgl, setWebgl] = useState(() => isSplatCapable());
+    // Whether per-frame reveal re-baking is safe (Metal/unified memory) vs the
+    // Direct3D/Windows path where we render the stock LoD world instead.
+    const [liveReveal] = useState(() => supportsLiveReveal());
     // #1 — cap the render resolution. Full-DPI (2×+) rendering of a splat cloud is
     // brutal on weak/integrated GPUs; clamping is a cheap 2–4× win with little
     // visible loss. The PerfGuard drops it further at runtime if needed.
@@ -707,6 +746,7 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                                     <SplatWorld
                                         url={world.url}
                                         paged={world.paged}
+                                        liveReveal={liveReveal}
                                         smooth={smooth}
                                         onProgress={handleProgress}
                                         onLoad={handleLoad}

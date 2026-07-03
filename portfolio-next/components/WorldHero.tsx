@@ -96,68 +96,57 @@ const REVEAL_EXIT_START = 0.62;
 /* ─────────────────────────────────────────────────────────────────
    SPLAT CAPABILITY DETECTION
    ─────────────────────────────────────────────────────────────────
-   Spark needs WebGL2. The dangerous case is a device that *has* WebGL2 but
-   only in software (SwiftShader / llvmpipe / "Microsoft Basic Render Driver"),
-   e.g. a Windows box with no usable GPU or with hardware acceleration disabled.
-   There, rendering 2.7M splats on the CPU spikes memory past 1 GB and freezes
-   the tab into a black screen before the adaptive PerfGuard ever gets a frame
-   to react. So we detect and reject those up front and serve the static hero.
-───────────────────────────────────────────────────────────────── */
+   One probe decides two things, from a SINGLE WebGL2 context:
+
+   1. `capable` — Spark needs WebGL2, and must NOT be a software renderer
+      (SwiftShader / llvmpipe / "Microsoft Basic Render"), which would run
+      splats on the CPU and freeze/OOM. Also gate out <2 GB RAM devices.
+
+   2. `liveReveal` — whether the per-frame reveal re-bake (our objectModifier +
+      generatorDirty) is affordable. It's cheap on Metal/unified memory (Mac/iOS)
+      but ruinous on the Windows ANGLE→Direct3D11 path, so we render the stock
+      LoD world there (like Marble) with no per-frame re-baking.
+
+   CRITICAL: the probe context is created with powerPreference:"high-performance"
+   and released immediately. On Windows laptops the browser tends to pin the
+   whole page to the GPU of the FIRST WebGL context created — a default/low-power
+   probe would strand the entire page on the integrated GPU (freeze) even when a
+   discrete GPU (e.g. RTX 3060) is present. Requesting high-performance here (and
+   on the main Canvas) keeps everything on the discrete GPU. */
 const SOFTWARE_RENDERER_RE =
     /swiftshader|llvmpipe|software|basic render|microsoft basic|angle \(software/i;
 
-function isSplatCapable(): boolean {
-    if (typeof window === "undefined") return false;
-    try {
-        const canvas = document.createElement("canvas");
-        const gl = canvas.getContext("webgl2");
-        if (!gl) return false; // Spark requires WebGL2
+type HeroSupport = { capable: boolean; liveReveal: boolean };
 
-        // Reject CPU/software WebGL2 implementations — they freeze on splat scenes.
+function detectHeroSupport(): HeroSupport {
+    if (typeof window === "undefined") return { capable: false, liveReveal: false };
+    try {
+        const gl = document.createElement("canvas").getContext("webgl2", {
+            powerPreference: "high-performance",
+            failIfMajorPerformanceCaveat: false,
+        }) as WebGL2RenderingContext | null;
+        if (!gl) return { capable: false, liveReveal: false }; // Spark needs WebGL2
+
         const dbg = gl.getExtension("WEBGL_debug_renderer_info");
-        if (dbg) {
-            const renderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "");
-            if (SOFTWARE_RENDERER_RE.test(renderer)) return false;
-        }
-
-        // Reject devices with too little RAM to hold the splat buffers (Chromium
-        // only; undefined elsewhere, in which case we don't gate on it).
+        const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "") : "";
         const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
-        if (typeof mem === "number" && mem > 0 && mem < 2) return false;
 
-        return true;
-    } catch {
-        return false;
-    }
-}
+        const software = SOFTWARE_RENDERER_RE.test(renderer);
+        const lowMem = typeof mem === "number" && mem > 0 && mem < 2;
+        const capable = !software && !lowMem;
 
-/* ─────────────────────────────────────────────────────────────────
-   LIVE-REVEAL CAPABILITY
-   ─────────────────────────────────────────────────────────────────
-   Our point-cloud reveal is a Spark objectModifier re-baked every frame
-   (generatorDirty). That's cheap on Metal + unified memory (Mac/iOS) but
-   ruinous on Windows, where WebGL2 runs via ANGLE→Direct3D11 with split memory
-   and a system-side shadow copy: per-frame re-bakes duplicate ~2.7M splats
-   across the bus (>1 GB, OOM → black screen) and the large custom shader stalls
-   the D3D HLSL compiler (freeze). So we only enable the live reveal off the
-   Direct3D path; elsewhere we render the stock LoD world (as Marble does), which
-   is proven to run on the same Windows machines.
-───────────────────────────────────────────────────────────────── */
-function supportsLiveReveal(): boolean {
-    if (typeof navigator === "undefined") return false;
-    // Windows == ANGLE→Direct3D11 backend. Gate on the OS (robust even when the
-    // GL renderer string is privacy-masked).
-    if (/Windows/i.test(navigator.userAgent || "")) return false;
-    // Also catch any explicit Direct3D backend reported by the GL renderer.
-    try {
-        const gl = document.createElement("canvas").getContext("webgl2");
-        const dbg = gl?.getExtension("WEBGL_debug_renderer_info");
-        const r = dbg && gl ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "") : "";
-        if (/direct3d|\bd3d/i.test(r)) return false;
+        // Per-frame re-bake only where it's cheap: not the Direct3D/Windows path.
+        const isWindows = /Windows/i.test(navigator.userAgent || "");
+        const isDirect3D = /direct3d|\bd3d/i.test(renderer);
+        const liveReveal = capable && !isWindows && !isDirect3D;
+
+        // Release the probe context so it doesn't hold a GPU/context slot.
+        gl.getExtension("WEBGL_lose_context")?.loseContext();
+
+        return { capable, liveReveal };
     } catch {
-        /* ignore — fall through */
+        return { capable: false, liveReveal: false };
     }
-    return true;
 }
 
 /* ─────────────────────────────────────────────────────────────────
@@ -206,7 +195,13 @@ function SplatWorld({
     const meshRef = useRef<SparkSplatMesh>(null);
 
     // Memoize constructor args so R3F doesn't rebuild the renderer/mesh each render.
-    const sparkArgs = useMemo(() => ({ renderer }), [renderer]);
+    // On the Direct3D/Windows path, render a much smaller LoD splat budget
+    // (lodSplatScale) — fragment overdraw + the per-frame sort are the render
+    // bottleneck there, and D3D11 handles them far less efficiently than Metal.
+    const sparkArgs = useMemo(
+        () => ({ renderer, lodSplatScale: liveReveal ? 1.0 : 0.45 }),
+        [renderer, liveReveal],
+    );
     // "Point cloud → render" reveal modifier + its driving uniforms.
     const { reveal, camPos, modifier } = useMemo(() => makeRevealModifier(), []);
     const revealStart = useRef(-1);
@@ -517,28 +512,31 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [progress, setProgress] = useState(0);
     const [loaded, setLoaded] = useState(false);
-    // Scroll is locked while the point cloud builds the world, then released.
-    // Only lock if the device can actually render splats (otherwise there's no
-    // reveal to wait for and we go straight to the static hero).
-    const [locked, setLocked] = useState(() => isSplatCapable());
+    // One capability probe (single high-performance WebGL2 context) decides both
+    // whether we can run splats at all and whether the per-frame reveal is safe.
+    const [support] = useState(detectHeroSupport);
+    // Scroll is locked while the world builds; only if the device can render it.
+    const [locked, setLocked] = useState(support.capable);
     // Arm the adaptive performance guard once the scene is interactive.
     const [perfArmed, setPerfArmed] = useState(false);
     const handleIntroComplete = useCallback(() => {
         setLocked(false);
         setPerfArmed(true);
     }, []);
-    // Lazily detect splat capability on first (client-only) render — this
-    // component is dynamically imported with ssr:false, so this runs in the browser.
-    const [webgl, setWebgl] = useState(() => isSplatCapable());
+    const [webgl, setWebgl] = useState(support.capable);
     // Whether per-frame reveal re-baking is safe (Metal/unified memory) vs the
     // Direct3D/Windows path where we render the stock LoD world instead.
-    const [liveReveal] = useState(() => supportsLiveReveal());
-    // #1 — cap the render resolution. Full-DPI (2×+) rendering of a splat cloud is
-    // brutal on weak/integrated GPUs; clamping is a cheap 2–4× win with little
-    // visible loss. The PerfGuard drops it further at runtime if needed.
+    const [liveReveal] = useState(support.liveReveal);
+    // #1 — cap the render resolution. Fragment overdraw scales with pixel count,
+    // so this is a big lever, especially on the Direct3D/Windows path where we
+    // clamp harder (1.0) than on Metal (1.5).
     const initialDpr = useMemo(
-        () => Math.min(typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1, 1.5),
-        [],
+        () =>
+            Math.min(
+                typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
+                liveReveal ? 1.5 : 1.0,
+            ),
+        [liveReveal],
     );
     // #3 — if rendering stays too slow even after lowering resolution, bail to the
     // static backdrop (covers software-WebGL fallbacks and GPU-less machines).

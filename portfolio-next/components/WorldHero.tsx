@@ -18,7 +18,6 @@ import {
     useMotionValueEvent,
     animate,
     motion,
-    useInView,
     type MotionValue,
 } from "framer-motion";
 import * as THREE from "three";
@@ -654,8 +653,11 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
         restDelta: 0.001,
     });
 
-    // Pause the render loop once the hero scrolls out of view to save GPU.
-    const isInView = useInView(containerRef, { margin: "0px 0px 500px 0px" });
+    // Keep the splat render loop running continuously while mounted (see the
+    // Canvas `frameloop` note). When the hero is scrolled away the camera is
+    // static, so these frames are cheap, but Spark stays alive (sort + paged
+    // streaming) so scrolling back into the hero repaints instead of showing a
+    // stale black buffer. (R3F still auto-pauses when the browser tab is hidden.)
 
     // Blend into the page: the black backdrop and the splat canvas fade out over
     // the final stretch of scroll, revealing the shared fixed SiteBackground that
@@ -778,7 +780,7 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                     <motion.div className="absolute inset-0" style={{ opacity: canvasOpacity }}>
                         <WorldErrorBoundary onError={handleError}>
                             <Canvas
-                                frameloop={isInView ? "always" : "demand"}
+                                frameloop="always"
                                 dpr={initialDpr}
                                 camera={{ position: [0, CAM_BASE_Y, CAM_START_Z], fov: 68 }}
                                 flat

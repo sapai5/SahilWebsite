@@ -14,9 +14,7 @@ import {
     useScroll,
     useSpring,
     useTransform,
-    useMotionValue,
     useMotionValueEvent,
-    animate,
     motion,
     type MotionValue,
 } from "framer-motion";
@@ -97,36 +95,31 @@ const REVEAL_EXIT_START = 0.62;
 /* ─────────────────────────────────────────────────────────────────
    SPLAT CAPABILITY DETECTION
    ─────────────────────────────────────────────────────────────────
-   One probe decides two things, from a SINGLE WebGL2 context:
+   A single WebGL2 probe decides whether we can run splats at all:
+   `capable` — Spark needs WebGL2, and must NOT be a software renderer
+   (SwiftShader / llvmpipe / "Microsoft Basic Render"), which would run splats on
+   the CPU and freeze/OOM. Also gate out <2 GB RAM devices.
 
-   1. `capable` — Spark needs WebGL2, and must NOT be a software renderer
-      (SwiftShader / llvmpipe / "Microsoft Basic Render"), which would run
-      splats on the CPU and freeze/OOM. Also gate out <2 GB RAM devices.
-
-   2. `liveReveal` — whether the per-frame reveal re-bake (our objectModifier +
-      generatorDirty) is affordable. It's cheap on Metal/unified memory (Mac/iOS)
-      but ruinous on the Windows ANGLE→Direct3D11 path, so we render the stock
-      LoD world there (like Marble) with no per-frame re-baking.
+   Every capable device runs the SAME path (point-cloud reveal + per-frame
+   re-bake) regardless of OS or GPU backend — one code path for all platforms.
 
    CRITICAL: the probe context is created with powerPreference:"high-performance"
-   and released immediately. On Windows laptops the browser tends to pin the
-   whole page to the GPU of the FIRST WebGL context created — a default/low-power
-   probe would strand the entire page on the integrated GPU (freeze) even when a
-   discrete GPU (e.g. RTX 3060) is present. Requesting high-performance here (and
-   on the main Canvas) keeps everything on the discrete GPU. */
+   and released immediately. On some laptops the browser pins the whole page to
+   the GPU of the FIRST WebGL context created — a default/low-power probe would
+   strand the entire page on the integrated GPU (freeze) even when a discrete GPU
+   is present. Requesting high-performance here (and on the main Canvas) keeps
+   everything on the discrete GPU. */
 const SOFTWARE_RENDERER_RE =
     /swiftshader|llvmpipe|software|basic render|microsoft basic|angle \(software/i;
 
-type HeroSupport = { capable: boolean; liveReveal: boolean };
-
-function detectHeroSupport(): HeroSupport {
-    if (typeof window === "undefined") return { capable: false, liveReveal: false };
+function detectHeroSupport(): boolean {
+    if (typeof window === "undefined") return false;
     try {
         const gl = document.createElement("canvas").getContext("webgl2", {
             powerPreference: "high-performance",
             failIfMajorPerformanceCaveat: false,
         }) as WebGL2RenderingContext | null;
-        if (!gl) return { capable: false, liveReveal: false }; // Spark needs WebGL2
+        if (!gl) return false; // Spark needs WebGL2
 
         const dbg = gl.getExtension("WEBGL_debug_renderer_info");
         const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "") : "";
@@ -136,17 +129,12 @@ function detectHeroSupport(): HeroSupport {
         const lowMem = typeof mem === "number" && mem > 0 && mem < 2;
         const capable = !software && !lowMem;
 
-        // Per-frame re-bake only where it's cheap: not the Direct3D/Windows path.
-        const isWindows = /Windows/i.test(navigator.userAgent || "");
-        const isDirect3D = /direct3d|\bd3d/i.test(renderer);
-        const liveReveal = capable && !isWindows && !isDirect3D;
-
         // Release the probe context so it doesn't hold a GPU/context slot.
         gl.getExtension("WEBGL_lose_context")?.loseContext();
 
-        return { capable, liveReveal };
+        return capable;
     } catch {
-        return { capable: false, liveReveal: false };
+        return false;
     }
 }
 
@@ -177,7 +165,6 @@ class WorldErrorBoundary extends Component<
 function SplatWorld({
     url,
     paged,
-    liveReveal,
     smooth,
     onProgress,
     onLoad,
@@ -186,7 +173,6 @@ function SplatWorld({
 }: {
     url: string;
     paged: boolean;
-    liveReveal: boolean;
     smooth: MotionValue<number>;
     onProgress: (e: ProgressEvent) => void;
     onLoad: () => void;
@@ -199,19 +185,16 @@ function SplatWorld({
     const meshRef = useRef<SparkSplatMesh>(null);
 
     // Memoize constructor args so R3F doesn't rebuild the renderer/mesh each render.
-    //  • maxStdDev < default √8 shrinks each splat's Gaussian footprint, cutting
-    //    fragment overdraw (the dominant cost on the Direct3D/Windows blend path)
-    //    with a perceptually minor change. √5 is Spark's recommended value.
-    //  • On Direct3D/Windows, also render a smaller LoD splat budget so there's
-    //    less to sort (Spark reads splat distances back from the GPU each frame,
-    //    which is slow on ANGLE/D3D11).
+    // maxStdDev < default √8 shrinks each splat's Gaussian footprint, cutting
+    // fragment overdraw with a perceptually minor change. √5 is Spark's
+    // recommended value.
     const sparkArgs = useMemo(
         () => ({
             renderer,
             maxStdDev: Math.sqrt(5),
-            lodSplatScale: liveReveal ? 1.0 : 0.6,
+            lodSplatScale: 1.0,
         }),
-        [renderer, liveReveal],
+        [renderer],
     );
     // "Point cloud → render" reveal modifier + its driving uniforms.
     const { reveal, camPos, modifier } = useMemo(() => makeRevealModifier(), []);
@@ -220,14 +203,12 @@ function SplatWorld({
     const introDone = useRef(false);
     const camLocal = useMemo(() => new THREE.Vector3(), []);
     const splatArgs = useMemo(() => {
-        // Only attach the reveal objectModifier where per-frame re-baking is cheap
-        // (Metal/unified memory). On Direct3D/Windows we render the stock LoD world
-        // (no modifier, no generatorDirty) so it doesn't freeze/OOM.
+        // Attach the point-cloud reveal objectModifier on every platform.
         const base = paged
             ? { url, paged: true as const, onProgress, onLoad }
             : { url, lod: true as const, onProgress, onLoad };
-        return liveReveal ? { ...base, objectModifiers: [modifier] } : base;
-    }, [url, paged, liveReveal, onProgress, onLoad, modifier]);
+        return { ...base, objectModifiers: [modifier] };
+    }, [url, paged, onProgress, onLoad, modifier]);
 
     // First-person "running" camera, driven by scroll.
     const lookTarget = useMemo(() => new THREE.Vector3(0, CAM_BASE_Y, -1), []);
@@ -261,22 +242,13 @@ function SplatWorld({
 
         // Marble bakes fairly muted color — lift it a touch once the splats load.
         const mesh = meshRef.current as (SparkSplatMesh & { isInitialized?: boolean; recolor?: THREE.Color; generatorDirty?: boolean }) | null;
-        if (liveReveal && mesh && !tinted.current && mesh.isInitialized && mesh.recolor) {
+        if (mesh && !tinted.current && mesh.isInitialized && mesh.recolor) {
             mesh.recolor.setRGB(1.14, 1.1, 1.04); // subtle warm brightness lift
             tinted.current = true;
         }
 
-        if (!liveReveal) {
-            // Direct3D/Windows path: no per-frame re-baking. Render the stock LoD
-            // world (Marble-parity) and just release the scroll lock once the
-            // splats are initialized. Intro/exit are handled by the canvas opacity
-            // fade instead of a point-cloud reveal.
-            if (mesh && mesh.isInitialized && !introDone.current) {
-                introDone.current = true;
-                onIntroComplete();
-            }
-        } else if (mesh && mesh.isInitialized) {
-            // "Point cloud" lifecycle (Metal/unified-memory only):
+        if (mesh && mesh.isInitialized) {
+            // "Point cloud" lifecycle:
             //  • intro — linger as points, then bloom into the world (time-based)
             //  • exit  — dissolve back into points as you scroll out (scroll-based)
             // We only re-run the generator while the value is actually changing.
@@ -546,31 +518,27 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [progress, setProgress] = useState(0);
     const [loaded, setLoaded] = useState(false);
-    // One capability probe (single high-performance WebGL2 context) decides both
-    // whether we can run splats at all and whether the per-frame reveal is safe.
-    const [support] = useState(detectHeroSupport);
+    // One capability probe (single high-performance WebGL2 context) decides
+    // whether we can run splats at all. Every capable device runs the same path.
+    const [capable] = useState(detectHeroSupport);
     // Scroll is locked while the world builds; only if the device can render it.
-    const [locked, setLocked] = useState(support.capable);
+    const [locked, setLocked] = useState(capable);
     // Arm the adaptive performance guard once the scene is interactive.
     const [perfArmed, setPerfArmed] = useState(false);
     const handleIntroComplete = useCallback(() => {
         setLocked(false);
         setPerfArmed(true);
     }, []);
-    const [webgl, setWebgl] = useState(support.capable);
-    // Whether per-frame reveal re-baking is safe (Metal/unified memory) vs the
-    // Direct3D/Windows path where we render the stock LoD world instead.
-    const [liveReveal] = useState(support.liveReveal);
+    const [webgl, setWebgl] = useState(capable);
     // #1 — cap the render resolution. Fragment overdraw scales with pixel count,
-    // so this is a big lever, especially on the Direct3D/Windows path where we
-    // clamp harder (1.0) than on Metal (1.5).
+    // so this is a big lever. Clamp to 1.5× DPR.
     const initialDpr = useMemo(
         () =>
             Math.min(
                 typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
-                liveReveal ? 1.5 : 1.0,
+                1.5,
             ),
-        [liveReveal],
+        [],
     );
     // #3 — if rendering stays too slow even after lowering resolution, bail to the
     // static backdrop (covers software-WebGL fallbacks and GPU-less machines).
@@ -665,19 +633,9 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     // background instead of meeting at a hard seam.
     const blackoutOpacity = useTransform(smooth, [0.95, 0.99], [1, 0]);
     const canvasExitOpacity = useTransform(smooth, [0.95, 0.99], [1, 0]);
-    // Entry fade: the point-cloud bloom can't run on the Direct3D/Windows path, so
-    // there we fade the canvas in once loaded. On Metal (liveReveal) the reveal
-    // handles the intro, so this stays at 1.
-    const introFade = useMotionValue(liveReveal ? 1 : 0);
-    const canvasOpacity = useTransform(
-        [canvasExitOpacity, introFade] as MotionValue<number>[],
-        ([exit, intro]: number[]) => exit * intro,
-    );
-    useEffect(() => {
-        if (liveReveal || !loaded) return; // Metal path uses the point-cloud reveal
-        const controls = animate(introFade, 1, { duration: 0.9, ease: [0.22, 1, 0.36, 1] });
-        return () => controls.stop();
-    }, [liveReveal, loaded, introFade]);
+    // The point-cloud reveal handles the intro on every platform, so the canvas
+    // only needs the exit fade for the blend into the page.
+    const canvasOpacity = canvasExitOpacity;
 
     // Chromatic "blend" on exit (igloo.inc-style): as the black backdrop dissolves
     // into the page background, its RGB channels split apart (+ a frost blur) via
@@ -794,7 +752,6 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                                     <SplatWorld
                                         url={world.url}
                                         paged={world.paged}
-                                        liveReveal={liveReveal}
                                         smooth={smooth}
                                         onProgress={handleProgress}
                                         onLoad={handleLoad}

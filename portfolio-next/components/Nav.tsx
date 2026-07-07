@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { EASE } from "./primitives";
 
@@ -15,21 +15,10 @@ const LINKS = [
 export default function Nav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  // Nav hides at the very top and slides in once you start scrolling.
-  const [scrolled, setScrolled] = useState(false);
   const isActive = (href: string) => pathname === href;
 
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // On the home page the nav hides over the hero and slides in on scroll.
-  // On every other route it's always visible.
-  const isHome = pathname === "/";
-  const visible = !isHome || scrolled || open;
+  // Nav is always visible, including at the top of the home hero.
+  const visible = true;
 
   return (
     <header

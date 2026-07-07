@@ -92,6 +92,12 @@ const REVEAL_LINGER = 0.6;
 // Scroll fraction at which the world dissolves back into a point cloud on exit.
 const REVEAL_EXIT_START = 0.62;
 
+// Cap the scroll speed *inside the hero* so the visitor can't fling straight
+// past the animation, while staying smooth. Expressed in viewport-heights per
+// second — the hero is a ~5.2-viewport-height scroll band. Wheel input is
+// accumulated (never discarded) and released at this capped velocity.
+const HERO_MAX_SCROLL_SPEED_VH_S = 0.8;
+
 /* ─────────────────────────────────────────────────────────────────
    SPLAT CAPABILITY DETECTION
    ─────────────────────────────────────────────────────────────────
@@ -267,6 +273,12 @@ function SplatWorld({
     // First-person "running" camera, driven by scroll.
     const lookTarget = useMemo(() => new THREE.Vector3(0, CAM_BASE_Y, -1), []);
     const tinted = useRef(false);
+    // Freeze ambient camera motion when the scroll is idle. A static camera means
+    // Spark performs no re-sort (hence no GPU→CPU readback stall), which is the
+    // key Windows perf win, and it stops the reveal from being nudged. Tracks the
+    // last scroll progress and keeps "moving" true for a short tail after it.
+    const lastP = useRef(-1);
+    const movingUntil = useRef(0);
 
     // Render on every scroll change even in "demand" frameloop, so scrolling back
     // into the hero always repaints (otherwise it can return to a stale/black
@@ -293,6 +305,13 @@ function SplatWorld({
     useFrame((state, delta) => {
         const p = smooth.get(); // 0 → 1 across the hero scroll
         const t = state.clock.elapsedTime;
+
+        // "moving" = scroll changed recently (short tail) or intro still building.
+        if (Math.abs(p - lastP.current) > 0.0002) {
+            movingUntil.current = t + 0.4;
+            lastP.current = p;
+        }
+        const moving = t < movingUntil.current || !introDone.current;
 
         // Marble bakes fairly muted color — lift it a touch once the splats load.
         const mesh = meshRef.current as (SparkSplatMesh & { isInitialized?: boolean; recolor?: THREE.Color; generatorDirty?: boolean }) | null;
@@ -338,9 +357,10 @@ function SplatWorld({
             }
         }
 
-        // Footstep bob + sway for a first-person "running" feel.
-        const bob = Math.sin(t * 2.6) * 0.02;
-        const sway = Math.sin(t * 1.3) * 0.015;
+        // Footstep bob + sway for a first-person "running" feel — only while
+        // actively moving, so an idle camera stays perfectly static (no re-sort).
+        const bob = moving ? Math.sin(t * 2.6) * 0.02 : 0;
+        const sway = moving ? Math.sin(t * 1.3) * 0.015 : 0;
 
         const runP = Math.min(p / CAM_TURN_START, 1);
         const turnP = THREE.MathUtils.smoothstep(p, CAM_TURN_START, CAM_TURN_END);
@@ -488,12 +508,22 @@ function TextBeat({
     const fadeInEnd = beat.from + (mid - beat.from) * 0.4;
     const fadeOutStart = mid + (beat.to - mid) * 0.6;
 
+    // The opening beat (from === 0) is shown immediately on load — no fade-in —
+    // so the name is visible before the visitor scrolls. It still fades out on
+    // the way past. Every other beat fades in and out as normal.
+    const openImmediately = beat.from === 0;
     const opacity = useTransform(
         smooth,
-        [beat.from, fadeInEnd, fadeOutStart, beat.to],
-        [0, 1, 1, 0],
+        openImmediately
+            ? [beat.from, fadeOutStart, beat.to]
+            : [beat.from, fadeInEnd, fadeOutStart, beat.to],
+        openImmediately ? [1, 1, 0] : [0, 1, 1, 0],
     );
-    const y = useTransform(smooth, [beat.from, fadeInEnd], [18, 0]);
+    const y = useTransform(
+        smooth,
+        openImmediately ? [beat.from, beat.to] : [beat.from, fadeInEnd],
+        openImmediately ? [0, 0] : [18, 0],
+    );
 
     const alignClass = {
         center: "left-1/2 -translate-x-1/2 text-center items-center",
@@ -551,13 +581,19 @@ function LoadingOverlay({ progress }: { progress: number }) {
             </div>
             <div className="flex flex-col items-center gap-2">
                 <span
-                    className="text-[10px] tracking-[0.22em] uppercase font-medium"
-                    style={{ color: fg(0.28) }}
+                    className="text-[15px] font-semibold tracking-tight"
+                    style={{ color: fg(0.85) }}
                 >
-                    Generating world…
+                    Sahil A. Pai
+                </span>
+                <span
+                    className="text-[10px] tracking-[0.22em] uppercase font-medium"
+                    style={{ color: fg(0.4) }}
+                >
+                    Software Engineer
                 </span>
                 <div
-                    className="w-36 h-px overflow-hidden rounded-full"
+                    className="mt-1 w-36 h-px overflow-hidden rounded-full"
                     style={{ backgroundColor: fg(0.1) }}
                 >
                     <div
@@ -595,13 +631,9 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     const [locked, setLocked] = useState(capable);
     // Arm the adaptive performance guard once the scene is interactive.
     const [perfArmed, setPerfArmed] = useState(false);
-    // The intro reveal is time-based, so the render loop must run continuously
-    // until it completes; afterwards the loop is gated on scroll activity (#3).
-    const [introRunning, setIntroRunning] = useState(true);
     const handleIntroComplete = useCallback(() => {
         setLocked(false);
         setPerfArmed(true);
-        setIntroRunning(false);
     }, []);
     const [webgl, setWebgl] = useState(capable);
     // #4 — cap the render resolution (scaled by device capability). Fragment
@@ -709,24 +741,94 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
         return () => io.disconnect();
     }, []);
 
-    // #2/#3 — the hero is "active" only while the scroll position is changing
-    // (plus a short tail) or the intro is still building. When idle the camera is
-    // frozen and the loop parks, so the expensive per-frame splat re-sort (a
-    // synchronous GPU→CPU readback, brutal on Windows/ANGLE) stops entirely. Any
-    // scroll re-arms it, and SplatWorld also invalidates on scroll so the canvas
-    // never returns to a stale frame.
-    const [scrolling, setScrolling] = useState(false);
-    const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-    useMotionValueEvent(smooth, "change", () => {
-        setScrolling(true);
-        clearTimeout(idleTimer.current);
-        idleTimer.current = setTimeout(() => setScrolling(false), 250);
-    });
+    // Cap scroll speed inside the hero so a fast flick can't skip the animation,
+    // while staying smooth. We intercept wheel input within the hero band and
+    // accumulate it into a target, then ease the real scroll toward that target
+    // at a capped velocity — so no input is lost, it's just paced. Outside the
+    // band (and for keyboard / scrollbar / touch) scrolling is left native.
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        let target = window.scrollY;
+        let running = false;
+        let raf = 0;
+        let lastT = 0;
 
-    // "always" while the scene is actively animating (intro or scroll) and on
-    // screen; "demand" otherwise (parks the loop — no sorting, no readback).
-    const frameloop: "always" | "demand" =
-        heroVisible && (introRunning || scrolling) ? "always" : "demand";
+        const band = () => {
+            const el = containerRef.current;
+            if (!el) return null;
+            const start = el.offsetTop;
+            return { start, end: start + el.offsetHeight - window.innerHeight };
+        };
+
+        const ease = () => {
+            const now = performance.now();
+            const dt = Math.min(50, now - lastT);
+            lastT = now;
+            const cur = window.scrollY;
+            const diff = target - cur;
+            const maxStep =
+                HERO_MAX_SCROLL_SPEED_VH_S * window.innerHeight * (dt / 1000);
+            if (Math.abs(diff) <= maxStep) {
+                window.scrollTo({ top: target, behavior: "instant" });
+                running = false;
+                return;
+            }
+            window.scrollTo({
+                top: cur + Math.sign(diff) * maxStep,
+                behavior: "instant",
+            });
+            raf = requestAnimationFrame(ease);
+        };
+
+        const onWheel = (e: WheelEvent) => {
+            const b = band();
+            if (!b) return;
+            const y = window.scrollY;
+            if (y < b.start || y > b.end) {
+                target = y; // outside the hero — behave natively
+                return;
+            }
+            const delta =
+                e.deltaMode === 1
+                    ? e.deltaY * 16 // lines → px
+                    : e.deltaMode === 2
+                        ? e.deltaY * window.innerHeight // pages → px
+                        : e.deltaY;
+            // Let the visitor leave the hero at its edges natively.
+            if ((y >= b.end && delta > 0) || (y <= b.start && delta < 0)) {
+                target = y;
+                return;
+            }
+            e.preventDefault();
+            if (!running) target = y; // resync before accumulating
+            target = Math.max(b.start, Math.min(b.end, target + delta));
+            if (!running) {
+                running = true;
+                lastT = performance.now();
+                raf = requestAnimationFrame(ease);
+            }
+        };
+
+        // Keep the target in sync when scrolled by other means (keyboard, bar).
+        const onScroll = () => {
+            if (!running) target = window.scrollY;
+        };
+
+        window.addEventListener("wheel", onWheel, { passive: false });
+        window.addEventListener("scroll", onScroll, { passive: true });
+        return () => {
+            window.removeEventListener("wheel", onWheel);
+            window.removeEventListener("scroll", onScroll);
+            cancelAnimationFrame(raf);
+        };
+    }, []);
+
+    // Render continuously while the hero is on screen; park the loop only once
+    // it's scrolled fully away. We deliberately do NOT toggle the loop on scroll
+    // idle — that caused the point-cloud reveal to occasionally re-fire. Instead
+    // the camera is frozen when idle (see SplatWorld), so a static view means
+    // Spark performs no re-sort/readback and idle frames are just cheap redraws.
+    const frameloop: "always" | "demand" = heroVisible ? "always" : "demand";
 
     // Blend into the page: the black backdrop and the splat canvas fade out over
     // the final stretch of scroll, revealing the shared fixed SiteBackground that

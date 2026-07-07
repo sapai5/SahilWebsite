@@ -95,13 +95,19 @@ const REVEAL_EXIT_START = 0.62;
 /* ─────────────────────────────────────────────────────────────────
    SPLAT CAPABILITY DETECTION
    ─────────────────────────────────────────────────────────────────
-   A single WebGL2 probe decides whether we can run splats at all:
+   A single WebGL2 probe decides whether we can run splats at all, and how hard
+   to push the device:
    `capable` — Spark needs WebGL2, and must NOT be a software renderer
    (SwiftShader / llvmpipe / "Microsoft Basic Render"), which would run splats on
    the CPU and freeze/OOM. Also gate out <2 GB RAM devices.
 
-   Every capable device runs the SAME path (point-cloud reveal + per-frame
-   re-bake) regardless of OS or GPU backend — one code path for all platforms.
+   Every capable device runs the SAME code path (point-cloud reveal + per-frame
+   re-bake) regardless of OS or GPU backend. What varies is a capability-based
+   (NOT OS-based) budget derived from navigator.deviceMemory /
+   hardwareConcurrency: weaker machines get a smaller splat budget
+   (`lodSplatScale`), throttled sorting (`minSortIntervalMs`), and a lower
+   resolution cap (`dprCap`). This is the World-Labs-style "scale the workload to
+   the host" approach.
 
    CRITICAL: the probe context is created with powerPreference:"high-performance"
    and released immediately. On some laptops the browser pins the whole page to
@@ -112,29 +118,66 @@ const REVEAL_EXIT_START = 0.62;
 const SOFTWARE_RENDERER_RE =
     /swiftshader|llvmpipe|software|basic render|microsoft basic|angle \(software/i;
 
-function detectHeroSupport(): boolean {
-    if (typeof window === "undefined") return false;
+type HeroSupport = {
+    capable: boolean;
+    // Splat budget scale for Spark's LoD. 1.0 = full per-platform default.
+    lodSplatScale: number;
+    // Minimum ms between splat re-sorts. Each sort does a synchronous GPU→CPU
+    // readPixels depth readback, which is a full pipeline stall on the Windows
+    // ANGLE→D3D11 path; throttling it is the single biggest cross-platform win.
+    minSortIntervalMs: number;
+    // Device-pixel-ratio cap. Fragment overdraw scales with pixel count.
+    dprCap: number;
+};
+
+const UNSUPPORTED: HeroSupport = {
+    capable: false,
+    lodSplatScale: 1,
+    minSortIntervalMs: 0,
+    dprCap: 1,
+};
+
+function detectHeroSupport(): HeroSupport {
+    if (typeof window === "undefined") return UNSUPPORTED;
     try {
         const gl = document.createElement("canvas").getContext("webgl2", {
             powerPreference: "high-performance",
             failIfMajorPerformanceCaveat: false,
         }) as WebGL2RenderingContext | null;
-        if (!gl) return false; // Spark needs WebGL2
+        if (!gl) return UNSUPPORTED; // Spark needs WebGL2
 
         const dbg = gl.getExtension("WEBGL_debug_renderer_info");
         const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "") : "";
-        const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+        const nav = navigator as Navigator & {
+            deviceMemory?: number;
+            hardwareConcurrency?: number;
+        };
+        const mem = nav.deviceMemory;
+        const cores = nav.hardwareConcurrency;
 
         const software = SOFTWARE_RENDERER_RE.test(renderer);
         const lowMem = typeof mem === "number" && mem > 0 && mem < 2;
-        const capable = !software && !lowMem;
 
         // Release the probe context so it doesn't hold a GPU/context slot.
         gl.getExtension("WEBGL_lose_context")?.loseContext();
 
-        return capable;
+        if (software || lowMem) return UNSUPPORTED;
+
+        // Capability-based budget scaling: a machine with little RAM or few
+        // logical cores gets a smaller splat budget, throttled sorting, and a
+        // lower resolution cap so the scene stays smooth everywhere.
+        const weak =
+            (typeof mem === "number" && mem > 0 && mem <= 4) ||
+            (typeof cores === "number" && cores > 0 && cores <= 4);
+
+        return {
+            capable: true,
+            lodSplatScale: weak ? 0.5 : 1.0,
+            minSortIntervalMs: weak ? 66 : 25,
+            dprCap: weak ? 1.0 : 1.5,
+        };
     } catch {
-        return false;
+        return UNSUPPORTED;
     }
 }
 
@@ -165,6 +208,8 @@ class WorldErrorBoundary extends Component<
 function SplatWorld({
     url,
     paged,
+    lodSplatScale,
+    minSortIntervalMs,
     smooth,
     onProgress,
     onLoad,
@@ -173,6 +218,8 @@ function SplatWorld({
 }: {
     url: string;
     paged: boolean;
+    lodSplatScale: number;
+    minSortIntervalMs: number;
     smooth: MotionValue<number>;
     onProgress: (e: ProgressEvent) => void;
     onLoad: () => void;
@@ -185,16 +232,23 @@ function SplatWorld({
     const meshRef = useRef<SparkSplatMesh>(null);
 
     // Memoize constructor args so R3F doesn't rebuild the renderer/mesh each render.
-    // maxStdDev < default √8 shrinks each splat's Gaussian footprint, cutting
-    // fragment overdraw with a perceptually minor change. √5 is Spark's
-    // recommended value.
+    //  • maxStdDev < default √8 shrinks each splat's Gaussian footprint, cutting
+    //    fragment overdraw with a perceptually minor change. √5 is Spark's
+    //    recommended value.
+    //  • lodSplatScale scales the rendered splat budget down on weak devices.
+    //  • minSortIntervalMs throttles re-sorting. Each sort triggers a synchronous
+    //    GPU→CPU readPixels depth readback that stalls the pipeline hard on the
+    //    Windows ANGLE→D3D11 path, so capping the sort rate is the biggest lever
+    //    for smoothness there (the sort already lags render by ≥1 frame, so this
+    //    is perceptually cheap).
     const sparkArgs = useMemo(
         () => ({
             renderer,
             maxStdDev: Math.sqrt(5),
-            lodSplatScale: 1.0,
+            lodSplatScale,
+            minSortIntervalMs,
         }),
-        [renderer],
+        [renderer, lodSplatScale, minSortIntervalMs],
     );
     // "Point cloud → render" reveal modifier + its driving uniforms.
     const { reveal, camPos, modifier } = useMemo(() => makeRevealModifier(), []);
@@ -359,11 +413,26 @@ function PerfGuard({ armed, onFallback }: { armed: boolean; onFallback: () => vo
     const windowStart = useRef(0);
     const warmupStart = useRef(0);
     const lowStreak = useRef(0);
+    const lastTick = useRef(0);
     const step = useRef(-1); // -1 = initial cap; indexes into DPR_STEPS as it degrades
 
     useFrame(() => {
         if (!armed) return;
         const now = performance.now();
+
+        // The render loop parks (frameloop "demand") when the hero is idle or
+        // scrolled away. On resume, the idle gap would otherwise look like a long
+        // window with few frames = a false "low FPS" reading. Detect the gap and
+        // restart the measurement window instead of penalising it.
+        if (lastTick.current !== 0 && now - lastTick.current > 200) {
+            windowStart.current = now;
+            frames.current = 0;
+            lowStreak.current = 0;
+            lastTick.current = now;
+            return;
+        }
+        lastTick.current = now;
+
         if (warmupStart.current === 0) {
             warmupStart.current = now;
             windowStart.current = now;
@@ -519,26 +588,31 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
     const [progress, setProgress] = useState(0);
     const [loaded, setLoaded] = useState(false);
     // One capability probe (single high-performance WebGL2 context) decides
-    // whether we can run splats at all. Every capable device runs the same path.
-    const [capable] = useState(detectHeroSupport);
+    // whether we can run splats and how hard to push the device.
+    const [support] = useState(detectHeroSupport);
+    const capable = support.capable;
     // Scroll is locked while the world builds; only if the device can render it.
     const [locked, setLocked] = useState(capable);
     // Arm the adaptive performance guard once the scene is interactive.
     const [perfArmed, setPerfArmed] = useState(false);
+    // The intro reveal is time-based, so the render loop must run continuously
+    // until it completes; afterwards the loop is gated on scroll activity (#3).
+    const [introRunning, setIntroRunning] = useState(true);
     const handleIntroComplete = useCallback(() => {
         setLocked(false);
         setPerfArmed(true);
+        setIntroRunning(false);
     }, []);
     const [webgl, setWebgl] = useState(capable);
-    // #1 — cap the render resolution. Fragment overdraw scales with pixel count,
-    // so this is a big lever. Clamp to 1.5× DPR.
+    // #4 — cap the render resolution (scaled by device capability). Fragment
+    // overdraw scales with pixel count, so this is a big lever on weak GPUs.
     const initialDpr = useMemo(
         () =>
             Math.min(
                 typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
-                1.5,
+                support.dprCap,
             ),
-        [],
+        [support.dprCap],
     );
     // #3 — if rendering stays too slow even after lowering resolution, bail to the
     // static backdrop (covers software-WebGL fallbacks and GPU-less machines).
@@ -621,11 +695,38 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
         restDelta: 0.001,
     });
 
-    // Keep the splat render loop running continuously while mounted (see the
-    // Canvas `frameloop` note). When the hero is scrolled away the camera is
-    // static, so these frames are cheap, but Spark stays alive (sort + paged
-    // streaming) so scrolling back into the hero repaints instead of showing a
-    // stale black buffer. (R3F still auto-pauses when the browser tab is hidden.)
+    // #3 — pause the render loop when the hero is scrolled out of view, so no
+    // per-frame sorting/readback runs while the visitor is down in the page.
+    const [heroVisible, setHeroVisible] = useState(true);
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el || typeof IntersectionObserver === "undefined") return;
+        const io = new IntersectionObserver(
+            ([entry]) => setHeroVisible(entry.isIntersecting),
+            { threshold: 0 },
+        );
+        io.observe(el);
+        return () => io.disconnect();
+    }, []);
+
+    // #2/#3 — the hero is "active" only while the scroll position is changing
+    // (plus a short tail) or the intro is still building. When idle the camera is
+    // frozen and the loop parks, so the expensive per-frame splat re-sort (a
+    // synchronous GPU→CPU readback, brutal on Windows/ANGLE) stops entirely. Any
+    // scroll re-arms it, and SplatWorld also invalidates on scroll so the canvas
+    // never returns to a stale frame.
+    const [scrolling, setScrolling] = useState(false);
+    const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    useMotionValueEvent(smooth, "change", () => {
+        setScrolling(true);
+        clearTimeout(idleTimer.current);
+        idleTimer.current = setTimeout(() => setScrolling(false), 250);
+    });
+
+    // "always" while the scene is actively animating (intro or scroll) and on
+    // screen; "demand" otherwise (parks the loop — no sorting, no readback).
+    const frameloop: "always" | "demand" =
+        heroVisible && (introRunning || scrolling) ? "always" : "demand";
 
     // Blend into the page: the black backdrop and the splat canvas fade out over
     // the final stretch of scroll, revealing the shared fixed SiteBackground that
@@ -738,7 +839,7 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                     <motion.div className="absolute inset-0" style={{ opacity: canvasOpacity }}>
                         <WorldErrorBoundary onError={handleError}>
                             <Canvas
-                                frameloop="always"
+                                frameloop={frameloop}
                                 dpr={initialDpr}
                                 camera={{ position: [0, CAM_BASE_Y, CAM_START_Z], fov: 68 }}
                                 flat
@@ -752,6 +853,8 @@ export default function WorldHero({ onReady }: { onReady?: () => void }) {
                                     <SplatWorld
                                         url={world.url}
                                         paged={world.paged}
+                                        lodSplatScale={support.lodSplatScale}
+                                        minSortIntervalMs={support.minSortIntervalMs}
                                         smooth={smooth}
                                         onProgress={handleProgress}
                                         onLoad={handleLoad}
